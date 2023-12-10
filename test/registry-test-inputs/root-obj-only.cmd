@@ -1,2 +1,0 @@
-GET /
-OUTFILE /foo.out
