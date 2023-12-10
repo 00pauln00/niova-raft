@@ -1,20 +1,22 @@
 AC_PREREQ(2.63)
 
-m4_define([niova_core_major], [0])
-m4_define([niova_core_minor], [1])
-m4_define([niova_core_suffix], [0])
-m4_define([niova_core_version],
-          [niova_core_major.niova_core_minor.niova_core_suffix])
+m4_define([niova_raft_major], [0])
+m4_define([niova_raft_minor], [1])
+m4_define([niova_raft_suffix], [0])
+m4_define([niova_raft_version],
+          [niova_raft_major.niova_raft_minor.niova_raft_suffix])
 
-AC_INIT([niova_core],[niova_core_version],[],[],[pauln@niova.io])
+AC_INIT([niova_pumicedb],[niova_raft_version],[],[],[pauln@niova.io])
+AC_USE_SYSTEM_EXTENSIONS
 
 # Dependencies
 PKG_PROG_PKG_CONFIG
 PKG_INSTALLDIR
 
-AC_SUBST(MAJOR_VERSION, niova_core_major)
-AC_SUBST(MINOR_VERSION, niova_core_minor)
-AC_SUBST(VERSION_SUFFIX, niova_core_suffix)
+AC_SUBST(MAJOR_VERSION, niova_raft_major)
+AC_SUBST(MINOR_VERSION, niova_raft_minor)
+AC_SUBST(VERSION_SUFFIX, niova_raft_suffix)
+AC_SUBST(NIOVA_PATH, )
 
 AC_SUBST([AM_CFLAGS], ["-g -O2 -Wall"])
 AC_SUBST([AM_CPPFLAGS], ["-Isrc/include -Isrc/contrib/include"])
@@ -32,8 +34,9 @@ AC_CONFIG_AUX_DIR([.])
 AM_PROG_AS
 AM_INIT_AUTOMAKE([foreign subdir-objects -Wall -Wno-portability])
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_HEADERS([niova_core_config.h])
+AC_CONFIG_HEADERS([niova_raft_config.h])
 AC_CONFIG_FILES([Makefile])
+AC_GNU_SOURCE
 
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -52,6 +55,17 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
+AX_NIOVA([found_niova=1], [found_niova=0])
+AM_CONDITIONAL([HAVE_NIOVA], [test ${found_niova} == 1])
+# Use CFLAGS and CPPFLAGS here since AC_CHECK_HEADERS doesn't locate the
+# NIOVA headers when NIOVA_CPPFLAGS is appended to AM_CPPFLAGS
+LDFLAGS="$LDFLAGS $NIOVA_LDFLAGS"
+CFLAGS="$CFLAGS $NIOVA_CFLAGS"
+CPPFLAGS="$CPPFLAGS $NIOVA_CPPFLAGS"
+if [test ${found_niova} == 0] ; then
+    AC_MSG_ERROR([Cannot find NIOVA installation])
+fi
+
 AC_HEADER_STDC
 AC_CHECK_HEADERS([pthread.h], [],
                  [AC_MSG_ERROR([failed to locate pthread.h])], [])
@@ -69,6 +83,13 @@ AC_CHECK_HEADERS([zlib.h], [],
                  [AC_MSG_ERROR([failed to locate zlib.h])], [])
 AC_CHECK_HEADERS([lz4.h], [],
                  [AC_MSG_ERROR([failed to locate lz4.h])], [])
+
+# niova core
+AC_CHECK_HEADERS([niova/niova_backtrace.h], [],
+                 [AC_MSG_ERROR([failed to locate niova/niova_backtrace.h])], [])
+
+AC_CHECK_HEADERS([niova/common.h], [],
+                 [AC_MSG_ERROR([failed to locate niova/common.h])], [])
 
 # rocksdb
 AC_CHECK_HEADERS([rocksdb/c.h], [],
@@ -126,7 +147,7 @@ AC_CHECK_LIB([lz4],[LZ4_compress_default],,
 
 #rocksdb
 # Rocksdb will not be included in the global LIB var
-LIBS_save=$LIBS
+#LIBS_save=$LIBS
 AC_CHECK_LIB([rocksdb],[rocksdb_writebatch_delete_range],
              [
                 AC_SUBST(ROCKSDB_LIBS, [-lrocksdb])
@@ -139,7 +160,17 @@ AC_CHECK_LIB([rocksdb],[rocksdb_checkpoint_object_create],,
 AC_CHECK_LIB([rocksdb],[rocksdb_checkpoint_object_destroy],,
              [AC_MSG_ERROR([rocksdb_checkpoint_object_destroy])])
 # restore the original LIBS
-LIBS=$LIBS_save
+#LIBS=$LIBS_save
+
+#niova-core
+AC_CHECK_LIB([niova],[ctl_svc_node_get],,
+             [AC_MSG_ERROR([Could not find niova])])
+
+AC_CHECK_LIB([niova_bt],[niova_backtrace_dump],,
+             [
+                AC_SUBST(NIOVA_BT_LIB, [-lniova_bt])
+             ],
+             [AC_MSG_ERROR([Could not find niova_backtrace_dump])])
 
 AC_ARG_ENABLE(
     [asan],
