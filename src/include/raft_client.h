@@ -8,10 +8,11 @@
 
 #include <sys/uio.h>
 
-#include "common.h"
-#include "env.h"
+#include "niova/common.h"
+#include "niova/env.h"
+#include "niova/util.h"
+
 #include "raft_net.h"
-#include "util.h"
 
 #define RAFT_CLIENT_REQUEST_TIMEOUT_MAX_SECS 0xffffffffU
 #define RAFT_CLIENT_REQUEST_TIMEOUT_SECS 60
