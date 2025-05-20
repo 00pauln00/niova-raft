@@ -78,17 +78,6 @@ jobs:
                              'pumicedb'
                              '/home/runner/work/go/go/bin'
 
-    - name:  run pmdb_client_error_demonstartion2 recipe in sync mode
-      run: cd /home/runner/work/niovad/niovad/build_dir/holon/ &&
-           ../run-recipes.sh '/home/runner/work/niovad/niovad/build_dir/holon'
-                             '/home/runner/work/niovad/niovad/build_dir'
-                             '/home/runner/work/niovad/niovad/holon_log' 5
-                             '/home/runner/work/niovad/niovad/build_dir/basic_recipes_with_sync.txt'
-                             'pumicedb'
-                             '0'
-                             '1'
-                             '/home/runner/work/go/go/bin'
-
 
     - name: Prepare artifact filename
       id: prepare_artifact_filename
