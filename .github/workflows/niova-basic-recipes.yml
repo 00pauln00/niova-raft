@@ -56,7 +56,7 @@ jobs:
       run: cp ./code/scripts/basic_recipes_with_sync.txt /home/runner/work/niovad/niovad/build_dir/
 
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
        repository: 00pauln00/holon
        #ref:
@@ -86,7 +86,7 @@ jobs:
       if: failure()
 
     - name: Archive the test results
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
          name: ${{ steps.prepare_artifact_filename.outputs.ARTIFACT_NAME }}
          path: /home/runner/work/niovad/niovad/holon_log
