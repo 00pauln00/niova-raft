@@ -62,9 +62,6 @@ jobs:
       run: cp ./scripts/run-recipes.sh /home/runner/work/niovad/niovad/build_dir/ &&
            cp ./scripts/basic_recipes.txt /home/runner/work/niovad/niovad/build_dir/
 
-    - name: Copy script to run recipes
-      run: cp ./scripts/basic_recipes_with_sync.txt /home/runner/work/niovad/niovad/build_dir/
-
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
@@ -85,7 +82,7 @@ jobs:
                              '/home/runner/work/niovad/niovad/build_dir'
                              '/home/runner/work/niovad/niovad/holon_log' 5
                              '/home/runner/work/niovad/niovad/build_dir/basic_recipes.txt'
-                             'pumicedb'
+                             'raft'
                              '/home/runner/work/go/go/bin'
 
 

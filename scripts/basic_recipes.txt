@@ -3,3 +3,4 @@ term_catch_up.yml
 basic_leader_election2.yml
 leader_overthrow.yml
 leader_self_depose.yml
+healthy_raftserver_cluster_type2.yml
