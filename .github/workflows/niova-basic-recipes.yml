@@ -63,7 +63,7 @@ jobs:
            cp ./scripts/basic_recipes.txt /home/runner/work/niovad/niovad/build_dir/
 
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
       with:
        repository: 00pauln00/holon
        #ref:
