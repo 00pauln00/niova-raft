@@ -646,7 +646,7 @@ raft_server_entry_calc_crc(const struct raft_entry *re)
     const int crc_len = sizeof(struct raft_entry) + rh->reh_data_size - offset;
     NIOVA_ASSERT(crc_len >= 0);
 
-    crc32_t crc = crc_pcl(buf, crc_len, 0);
+    crc32_t crc = niova_crc(buf, crc_len, 0);
 
     DBG_RAFT_ENTRY(((rh->reh_crc && crc != rh->reh_crc) ? LL_WARN : LL_DEBUG),
                    &re->re_header, "calculated crc=%u", crc);
@@ -4988,7 +4988,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     char *reply_buf;
     struct raft_net_client_request_handle *rncr_ptr;
 
-    for (uint32_t i = 0; i < reh.reh_num_entries; i++)
+    for (uint32_t i = 0; i < reh.reh_num_entries && !reh.reh_leader_change_marker && reh.reh_data_size; i++)
     {
         reply_buf = (char *)reply_bi[i]->bi_iov.iov_base;
         rncr_ptr = &rncr[i];
@@ -5036,7 +5036,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
             reh.reh_num_entries);
     }
     // init reply for each request.
-    for (uint32_t i = 0; i < reh.reh_num_entries; i++)
+    for (uint32_t i = 0; i < reh.reh_num_entries && !reh.reh_leader_change_marker && reh.reh_data_size; i++)
     {
          /* Perform basic initialization on the reply buffer if the SM has
           * provided the necessary info for completing the reply.  The SM
@@ -5082,7 +5082,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         RAFT_NET_EVP_NOTIFY_NO_FAIL(ri, RAFT_EVP_SM_APPLY);
 
     // Reply to client for each request.
-    for (uint32_t i = 0; i < reh.reh_num_entries; i++)
+    for (uint32_t i = 0; i < reh.reh_num_entries && !reh.reh_leader_change_marker && reh.reh_data_size; i++)
     {
         if (raft_instance_is_leader(ri) && // Only issue if we're the leader!
             raft_net_client_request_handle_has_reply_info(&rncr[i]) &&
