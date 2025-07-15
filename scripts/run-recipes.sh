@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 HOLON_LIBS=${1}
 BIN_PATH=${2}
