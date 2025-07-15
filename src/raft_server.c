@@ -1731,11 +1731,12 @@ raft_server_send_msg_to_client(struct raft_instance *ri,
     if (!ri || !rncr || !rncr->rncr_reply)
         return -EINVAL;
 
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
     const ssize_t msg_size = (sizeof(struct raft_client_rpc_msg) +
-                              rncr->rncr_reply->rcrm_data_size);
+                              reply->rcrm_data_size);
     struct iovec iov[1] = {
         [0].iov_len = msg_size,
-        [0].iov_base = rncr->rncr_reply,
+        [0].iov_base = reply,
     };
 
     if (csn)
@@ -4410,8 +4411,8 @@ raft_server_write_coalesce_entry(struct raft_instance *ri, struct iovec *data, s
      *    nentries so be sure to take the tmp variable AFTER calling it.
      */
     
-
-    for (uint32_t i = 0; i < len(data); i++)
+    size_t len_of_data = sizeof(*data)/sizeof(data[0]);
+    for (uint32_t i = 0; i < len_of_data; i++)
         memcpy((ri->ri_coalesced_wr->rcwi_buffer +
             ri->ri_coalesced_wr->rcwi_total_size), data[i].iov_base, data[i].iov_len);
             
@@ -5083,7 +5084,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
               * first and restore it again.
               */
              struct raft_net_client_request_handle *rncr_ptr = &rncr[i];
-             struct raft_client_rpc_msg *reply = rncr_ptr->rncr_reply;
+             struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr_ptr->rncr_reply;
              uint32_t orig_rcrm_data_size = reply->rcrm_data_size;
 
              raft_server_client_reply_init(

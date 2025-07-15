@@ -207,7 +207,7 @@ rst_sm_handler_commit(struct raft_net_client_request_handle *rncr)
         raft_net_client_request_handle_set_reply_info(rncr, sm->smn_uuid,
                                                       sma->smna_pending_msg_id);
 
-        int rc = rst_sm_reply_init(rncr->rncr_reply, sm->smn_uuid,
+        int rc = rst_sm_reply_init((struct raft_client_rpc_msg *)rncr->rncr_reply, sm->smn_uuid,
                                    RAFT_TEST_DATA_OP_WRITE, NULL, 0);
         FATAL_IF((rc), "rst_sm_reply_init(): %s", strerror(-rc));
     }
@@ -240,7 +240,7 @@ rst_sm_handler_write(struct raft_net_client_request_handle *rncr)
                  rncr->rncr_type == RAFT_NET_CLIENT_REQ_TYPE_WRITE &&
                  !raft_net_client_request_handle_writes_raft_entry(rncr));
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     // Map the raft_test_data_block from the request data
     const struct raft_client_rpc_msg *request = rncr->rncr_request;
@@ -366,7 +366,7 @@ rst_sm_handler_read(struct raft_net_client_request_handle *rncr)
                  rncr->rncr_type == RAFT_NET_CLIENT_REQ_TYPE_READ &&
                  !raft_net_client_request_handle_writes_raft_entry(rncr));
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     // Errors returned here are service related, not application related
     if (!reply)
@@ -418,7 +418,7 @@ rst_sm_handler_verify_request_and_set_type(
         rncr->rncr_type != RAFT_NET_CLIENT_REQ_TYPE_NONE)
         return -EINVAL;
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     const struct raft_client_rpc_msg *request = rncr->rncr_request;
 
