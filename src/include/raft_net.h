@@ -325,7 +325,7 @@ struct raft_net_client_request_handle
     const struct raft_client_rpc_msg     *rncr_request;
     const char                           *rncr_request_or_commit_data;
     const size_t                          rncr_request_or_commit_data_size;
-    struct raft_client_rpc_msg           *rncr_reply;
+    const char                           *rncr_reply;
     const size_t                          rncr_reply_data_max_size;
     size_t                                rncr_reply_data_size;
     uint64_t                              rncr_msg_id;
@@ -579,7 +579,7 @@ raft_client_net_request_handle_error_set(
         rncr->rncr_op_error = rncr_op_err;
 
         if (rncr->rncr_reply)
-            raft_client_msg_error_set(rncr->rncr_reply, reply_sys, reply_app);
+            raft_client_msg_error_set((struct raft_client_rpc_msg *) rncr->rncr_reply, reply_sys, reply_app);
     }
 }
 
@@ -649,7 +649,7 @@ raft_net_client_request_handle_reply_data_map(
     if (!rncr || !size || !rncr->rncr_reply)
         return NULL;
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     NIOVA_ASSERT(reply->rcrm_data_size <= rncr->rncr_reply_data_max_size);
 
