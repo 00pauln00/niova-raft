@@ -4389,7 +4389,8 @@ raft_server_net_client_request_init_client_rpc(
  * Keep collecting the incoming writes in re_coalesce_write raft_entry.
  */
 static void
-raft_server_write_coalesce_entry(struct raft_instance *ri, struct iovec *data, size_t len,
+raft_server_write_coalesce_entry(struct raft_instance *ri, void *data, size_t len,
+                                void *app_data, size_t app_data_len,
                                  enum raft_write_entry_opts opts)
 {
     NIOVA_ASSERT(
@@ -4400,27 +4401,37 @@ raft_server_write_coalesce_entry(struct raft_instance *ri, struct iovec *data, s
     (void)opts;
 
     // Buffer should have space to accomodate this request.
-    FATAL_IF((len + ri->ri_coalesced_wr->rcwi_total_size) >
+    FATAL_IF((len + app_data_len + ri->ri_coalesced_wr->rcwi_total_size) >
              RAFT_ENTRY_MAX_DATA_SIZE(ri),
              "Coalesced buffer shouldn't be full here!. rcwi_total_size: %ld,"
              " len: %ld",
-             ri->ri_coalesced_wr->rcwi_total_size, data[0].iov_len + data[1].iov_len);
+             ri->ri_coalesced_wr->rcwi_total_size, len + app_data_len);
 
     /* Store the new write entry at the free slot at ri->ri_coalesced_wr.
      * NOTE: that raft_server_write_coalesced_entries() will have reset
      *    nentries so be sure to take the tmp variable AFTER calling it.
      */
     
-    size_t len_of_data = sizeof(*data)/sizeof(data[0]);
-    for (uint32_t i = 0; i < len_of_data; i++)
-        memcpy((ri->ri_coalesced_wr->rcwi_buffer +
-            ri->ri_coalesced_wr->rcwi_total_size), data[i].iov_base, data[i].iov_len);
-            
 
+    //Copy the write request(*data) to the coalesced buffer
+    memcpy((ri->ri_coalesced_wr->rcwi_buffer +
+            ri->ri_coalesced_wr->rcwi_total_size), data, len);
     uint32_t nentries = ri->ri_coalesced_wr->rcwi_nentries;
     ri->ri_coalesced_wr->rcwi_entry_sizes[nentries] = len;
-    ri->ri_coalesced_wr->rcwi_nentries++;
     ri->ri_coalesced_wr->rcwi_total_size += len;
+
+    /* If the app_data is provided, copy it to the coalesced buffer.
+     * Note that app_data_len can be 0
+     */
+    if (app_data && app_data_len)
+    {
+        memcpy((ri->ri_coalesced_wr->rcwi_buffer +
+                ri->ri_coalesced_wr->rcwi_total_size), app_data, app_data_len);        
+        ri->ri_coalesced_wr->rcwi_entry_sizes[nentries] += app_data_len;
+        ri->ri_coalesced_wr->rcwi_total_size += app_data_len;
+    }
+
+    ri->ri_coalesced_wr->rcwi_nentries++;
 
     // Retest and push if the limits have been met.
     if (!ri->ri_coalesced_writes ||
@@ -4502,20 +4513,11 @@ raft_server_client_rncr_write_raft_entry(
 
     const struct raft_client_rpc_msg *rcm = rncr->rncr_request;
 
-    size_t size_to_write;
-    struct iovec iov[2];
-    iov[0].iov_base = (void *)rcm->rcrm_data;
-    iov[0].iov_len = rcm->rcrm_data_size;
-    size_to_write = rcm->rcrm_data_size;
-    iov[1].iov_base = (void *)rncr->rncr_reply;
-    iov[1].iov_len = rncr->rncr_reply_data_size;
-    size_to_write += rncr->rncr_reply_data_size;
-
     /* For write operation, check if the coalesced buffer is sufficient for
      * accomodating this request. Otherwise first flush the entries in
      * coalesced buffer.
      */
-    if (( size_to_write + ri->ri_coalesced_wr->rcwi_total_size) >
+    if (( rcm->rcrm_data_size + rncr->rncr_reply_data_size + ri->ri_coalesced_wr->rcwi_total_size) >
         RAFT_ENTRY_MAX_DATA_SIZE(ri))
         raft_server_write_coalesced_entries(ri);
 
@@ -4533,8 +4535,9 @@ raft_server_client_rncr_write_raft_entry(
     raft_net_sm_write_supplements_merge(&ri->ri_coalesced_wr->rcwi_ws,
                                         &rncr->rncr_sm_write_supp);
 
-    raft_server_write_coalesce_entry(ri, iov, size_to_write,
-                                     RAFT_WR_ENTRY_OPT_NONE);
+    raft_server_write_coalesce_entry(ri, (void *)rcm->rcrm_data, rcm->rcrm_data_size,
+                                    (void *)rncr->rncr_reply, rncr->rncr_reply_data_size,
+                                    RAFT_WR_ENTRY_OPT_NONE);
 }
 
 static void
