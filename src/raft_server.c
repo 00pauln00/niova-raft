@@ -4141,7 +4141,7 @@ raft_server_reply_to_client(struct raft_instance *ri,
     /* Copy the reply info from the provided rncr pointer.  This reply info
      * fields have been written by the state_machine callback.
      */
-    const struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    const struct raft_client_rpc_msg *reply = (const struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     if (rncr->rncr_request)
         DBG_RAFT_CLIENT_RPC(LL_DEBUG, rncr->rncr_request, "original request");
@@ -4161,7 +4161,7 @@ raft_server_udp_client_deny_request(struct raft_instance *ri,
 {
     NIOVA_ASSERT(ri && rncr && rncr->rncr_request && rncr->rncr_reply);
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
 
     reply->rcrm_sys_error = rc;
 
@@ -4193,7 +4193,7 @@ raft_server_client_reply_init(const struct raft_instance *ri,
           rncr->rncr_reply_data_size < rncr->rncr_reply_data_max_size))
         );
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
     memset(reply, 0, sizeof(struct raft_client_rpc_msg));
 
     uuid_copy(reply->rcrm_raft_id, ri->ri_csn_raft->csn_uuid);
@@ -4323,7 +4323,7 @@ raft_server_net_client_request_init(
         //memset the reply_buf to make sure garbage values are not used from it.
         memset(reply_buf, 0, sizeof(struct raft_client_rpc_msg));
 
-        rncr->rncr_reply = (struct raft_client_rpc_msg *)reply_buf;
+        rncr->rncr_reply = (const char *) reply_buf;
     }
 
     CONST_OVERRIDE(size_t, rncr->rncr_reply_data_max_size,
