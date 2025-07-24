@@ -1,5 +1,5 @@
 name: Common CI Setup
-
+description: Sets up environment and dependencies for Niova CI workflows.
 runs:
     using: "composite"
     steps:
@@ -41,10 +41,6 @@ runs:
 
 #
 #### Submodule Bits
-# niova-pumicedb submodule init
-    - name: submodule init
-      run: git submodule init && git submodule update
-      shell: bash
 
 # build backtrace submodule
     - name: build libbacktrace
