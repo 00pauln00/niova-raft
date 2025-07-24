@@ -13,6 +13,9 @@ jobs:
     continue-on-error: true
 
     steps:
+    - name: Checkout current repository
+      uses: actions/checkout@v4
+      
     - name: Common CI Setup
       uses: ./.github/actions/common-ci-setup
 
