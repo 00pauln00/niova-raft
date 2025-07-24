@@ -15,9 +15,9 @@ jobs:
     steps:
     - name: Checkout current repository
       uses: actions/checkout@v4
-      
+
     - name: Common CI Setup
-      uses: ./.github/actions/common-ci-setup
+      uses: ./.github/actions/common-setup
 
     - name: Copy run-recipes.sh and basic_recipes.txt
       run: |
