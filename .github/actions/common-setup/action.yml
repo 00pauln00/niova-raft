@@ -14,16 +14,6 @@ runs:
       run: sudo -E apt-get install -y uuid-dev uuid libuuid1 libgcrypt20 openssl libssl-dev `apt-cache search librocksdb | awk '{print $1}'` uncrustify libasan5 libtsan0
       shell: bash
 
-# Install golang
-    - name: Install golang 1.20.3
-      run: sudo rm -rf /usr/bin/go /bin/go &&
-           wget https://golang.org/dl/go1.20.3.linux-amd64.tar.gz &&
-           mkdir -p /home/runner/work/go &&
-           tar -C /home/runner/work/go -xzf go1.20.3.linux-amd64.tar.gz &&
-           sudo ln -s /home/runner/work/go/go/bin/go /bin/ &&
-           go version
-      shell: bash
-
 # Install python libraries
     - name: Install python libraries
       run:  pip3 install setuptools wheel func_timeout sockets psutil dpath jmespath
@@ -57,7 +47,7 @@ runs:
         ./configure --enable-devel --enable-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
         make -j 4 && make -j 4 check && make install
       shell: bash
-      
+
 #
 #### End Submodule Bits
 #
@@ -68,13 +58,6 @@ runs:
       shell: bash
       env:
         LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib
-
-    - name: Build go applications using makefile
-      run: ls -al &&
-           which go &&
-           cd go &&
-           make -e DIR=/home/runner/work/niovad/niovad/build_dir/
-      shell: bash
 
 # Checkout holon repo
     - name: Checkout repository
