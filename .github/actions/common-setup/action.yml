@@ -41,6 +41,10 @@ runs:
 
 #
 #### Submodule Bits
+# submodule init
+    - name: submodule init
+      run: git submodule init && git submodule update
+      shell: bash
 
 # build backtrace submodule
     - name: build libbacktrace
