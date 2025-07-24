@@ -1,5 +1,5 @@
 name: Common CI Setup
-description: Sets up environment and dependencies for Niova CI workflows.
+description: Sets up environment and dependencies for Niova-Raft CI workflows.
 runs:
     using: "composite"
     steps:
@@ -58,22 +58,6 @@ runs:
       shell: bash
       env:
         LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib
-
-# Checkout holon repo
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-       repository: 00pauln00/holon
-       ref: niova_core_recipes_compatibility
-       path: ./holon
-
-    - name: Copy holon repo
-      run: cp -r ./holon /home/runner/work/niovad/niovad/build_dir/
-      shell: bash
-
-    - name: Create log directory for storing holon logs
-      run: mkdir  /home/runner/work/niovad/niovad/holon_log
-      shell: bash
 
 # GCOV Setup
     - name: Create dir for cover data counters, metadata to be placed
