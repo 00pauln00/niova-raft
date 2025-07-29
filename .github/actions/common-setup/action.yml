@@ -45,7 +45,7 @@ runs:
     - name: build niova-core
       run: cd modules/niova-core/ && ./prepare.sh &&
         ./configure --enable-devel --enable-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
-        make -j 4 && make -j 4 check && make install
+        make && make check && make install
       shell: bash
 
 #
@@ -53,8 +53,8 @@ runs:
 #
     - name: make
       run: ./prepare.sh &&
-           ./configure --with-niova=/home/runner/work/niovad/niovad/build_dir/ --prefix=/home/runner/work/niovad/niovad/build_dir/ --enable-devel &&
-           make -j && make install
+           ./configure --with-niova=/home/runner/work/niovad/niovad/build_dir/ --prefix=/home/runner/work/niovad/niovad/build_dir/ --enable-devel --enable-asan &&
+           make && make check make install
       shell: bash
       env:
         LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib

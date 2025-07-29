@@ -42,6 +42,7 @@ jobs:
 
     - name: Run holon basic recipes
       run: |
+        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.5
         cd /home/runner/work/niovad/niovad/build_dir/holon/
         ../run-recipes.sh \
           "/home/runner/work/niovad/niovad/build_dir/holon" \
@@ -51,16 +52,12 @@ jobs:
           "raft" \
           "/home/runner/work/go/go/bin"
       shell: bash
+      env:
+        LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib
+        NIOVA_BIN_PATH: /home/runner/work/niovad/niovad/build_dir/libexec/niova
+        CGO_CFLAGS: -I/home/runner/work/niovad/niovad/build_dir/include/niova
+        CGO_LDFLAGS: -L/home/runner/work/niovad/niovad/build_dir/lib
 
-    - name: Prepare artifact filename
-      id: prepare_artifact_filename
+    - name: Teardown and archive on failure
       if: failure()
-      run: echo "ARTIFACT_NAME=test-recipe-report_${{ github.event.pull_request.head.sha }}_${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
-      shell: bash
-
-    - name: Archive the test results
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.prepare_artifact_filename.outputs.ARTIFACT_NAME }}
-        path: /home/runner/work/niovad/niovad/holon_log
+      uses: ./.github/actions/teardown-failure
