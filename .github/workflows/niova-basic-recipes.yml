@@ -52,11 +52,6 @@ jobs:
           "raft" \
           "/home/runner/work/go/go/bin"
       shell: bash
-      env:
-        LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib
-        NIOVA_BIN_PATH: /home/runner/work/niovad/niovad/build_dir/libexec/niova
-        CGO_CFLAGS: -I/home/runner/work/niovad/niovad/build_dir/include/niova
-        CGO_LDFLAGS: -L/home/runner/work/niovad/niovad/build_dir/lib
 
     - name: Teardown and archive on failure
       if: failure()
