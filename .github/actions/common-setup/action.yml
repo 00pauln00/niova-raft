@@ -19,7 +19,6 @@ runs:
       run:  pip3 install setuptools wheel func_timeout sockets psutil dpath jmespath
       shell: bash
 
-
 # Install Ansible
     - name: Install Ansible
       run:  pip3 install ansible==9.2
@@ -44,7 +43,7 @@ runs:
 # build niova-core
     - name: build niova-core
       run: cd modules/niova-core/ && ./prepare.sh &&
-        ./configure --enable-devel --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
+        ./configure --enable-devel --enale-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
         make && make check && make install
       shell: bash
 
@@ -53,7 +52,7 @@ runs:
 #
     - name: make
       run: ./prepare.sh &&
-           ./configure --with-niova=/home/runner/work/niovad/niovad/build_dir/ --prefix=/home/runner/work/niovad/niovad/build_dir/ --enable-devel &&
+           ./configure --enable-devel --enable-asan --with-niova=/home/runner/work/niovad/niovad/build_dir/ --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
            make && make check && make install
       shell: bash
       env:
