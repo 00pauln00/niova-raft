@@ -43,7 +43,7 @@ runs:
 # build niova-core
     - name: build niova-core
       run: cd modules/niova-core/ && ./prepare.sh &&
-        ./configure --enable-devel --enale-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
+        ./configure --enable-devel --enable-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
         make && make check && make install
       shell: bash
 
