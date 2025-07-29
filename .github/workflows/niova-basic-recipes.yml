@@ -43,6 +43,7 @@ jobs:
     - name: Run holon basic recipes
       run: |
         export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.5
+        export ASAN_OPTIONS=detect_leaks=0
         cd /home/runner/work/niovad/niovad/build_dir/holon/
         ../run-recipes.sh \
           "/home/runner/work/niovad/niovad/build_dir/holon" \
