@@ -29,7 +29,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: 00pauln00/holon
-        ref: niova_core_recipes_compatibility
+        ref: raft_recipes_fix
         path: ./holon
 
     - name: Copy holon repo to build_dir
