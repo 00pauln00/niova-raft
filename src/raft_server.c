@@ -1728,10 +1728,10 @@ raft_server_send_msg_to_client(struct raft_instance *ri,
 {
     NIOVA_ASSERT(ri && rncr);
 
-    if (!ri || !rncr || !rncr->rncr_reply)
+    if (!ri || !rncr || !rncr->rncr_reply.rncr_reply_ptr)
         return -EINVAL;
 
-    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
     const ssize_t msg_size = (sizeof(struct raft_client_rpc_msg) +
                               reply->rcrm_data_size);
     struct iovec iov[1] = {
@@ -4141,7 +4141,7 @@ raft_server_reply_to_client(struct raft_instance *ri,
     /* Copy the reply info from the provided rncr pointer.  This reply info
      * fields have been written by the state_machine callback.
      */
-    const struct raft_client_rpc_msg *reply = (const struct raft_client_rpc_msg *) rncr->rncr_reply;
+    const struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
     if (rncr->rncr_request)
         DBG_RAFT_CLIENT_RPC(LL_DEBUG, rncr->rncr_request, "original request");
@@ -4159,9 +4159,9 @@ raft_server_udp_client_deny_request(struct raft_instance *ri,
                                     struct ctl_svc_node *csn,
                                     const int rc)
 {
-    NIOVA_ASSERT(ri && rncr && rncr->rncr_request && rncr->rncr_reply);
+    NIOVA_ASSERT(ri && rncr && rncr->rncr_request && rncr->rncr_reply.rncr_reply_ptr);
 
-    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
     reply->rcrm_sys_error = rc;
 
@@ -4186,14 +4186,14 @@ raft_server_client_reply_init(const struct raft_instance *ri,
     NIOVA_ASSERT(
         ri && rncr &&
         (rncr->rncr_is_direct_req ||
-         (rncr->rncr_reply &&
+         (rncr->rncr_reply.rncr_reply_ptr &&
           (msg_type == RAFT_CLIENT_RPC_MSG_TYPE_PING_REPLY ||
            msg_type == RAFT_CLIENT_RPC_MSG_TYPE_REPLY) &&
           raft_net_client_request_handle_has_reply_info(rncr) &&
-          rncr->rncr_reply_data_size < rncr->rncr_reply_data_max_size))
-        );
+          rncr->rncr_reply.rncr_reply_data_size <
+          rncr->rncr_reply.rncr_reply_data_max_size)));
 
-    struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
     memset(reply, 0, sizeof(struct raft_client_rpc_msg));
 
     uuid_copy(reply->rcrm_raft_id, ri->ri_csn_raft->csn_uuid);
@@ -4202,7 +4202,7 @@ raft_server_client_reply_init(const struct raft_instance *ri,
 
     reply->rcrm_type = msg_type;
     reply->rcrm_msg_id = rncr->rncr_msg_id;
-    reply->rcrm_data_size = rncr->rncr_reply_data_size;
+    reply->rcrm_data_size = rncr->rncr_reply.rncr_reply_data_size;
 }
 
 static raft_net_cb_ctx_bool_t
@@ -4321,12 +4321,12 @@ raft_server_net_client_request_init(
     if (reply_buf)
     {
         //memset the reply_buf to make sure garbage values are not used from it.
-        memset(reply_buf, 0, sizeof(struct raft_client_rpc_msg));
+        memset(reply_buf, 0, reply_buf_size);
 
-        rncr->rncr_reply = (const char *) reply_buf;
+        rncr->rncr_reply.rncr_reply_ptr = reply_buf;
     }
 
-    CONST_OVERRIDE(size_t, rncr->rncr_reply_data_max_size,
+    CONST_OVERRIDE(size_t, rncr->rncr_reply.rncr_reply_data_max_size,
                    (reply_buf_size - sizeof(struct raft_client_rpc_msg)));
 
 
@@ -4411,7 +4411,7 @@ raft_server_write_coalesce_entry(struct raft_instance *ri, void *data, size_t le
      * NOTE: that raft_server_write_coalesced_entries() will have reset
      *    nentries so be sure to take the tmp variable AFTER calling it.
      */
-    
+
 
     //Copy the write request(*data) to the coalesced buffer
     memcpy((ri->ri_coalesced_wr->rcwi_buffer +
@@ -4426,7 +4426,7 @@ raft_server_write_coalesce_entry(struct raft_instance *ri, void *data, size_t le
     if (app_data && app_data_len)
     {
         memcpy((ri->ri_coalesced_wr->rcwi_buffer +
-                ri->ri_coalesced_wr->rcwi_total_size), app_data, app_data_len);        
+                ri->ri_coalesced_wr->rcwi_total_size), app_data, app_data_len);
         ri->ri_coalesced_wr->rcwi_entry_sizes[nentries] += app_data_len;
         ri->ri_coalesced_wr->rcwi_total_size += app_data_len;
     }
@@ -4517,7 +4517,7 @@ raft_server_client_rncr_write_raft_entry(
      * accomodating this request. Otherwise first flush the entries in
      * coalesced buffer.
      */
-    if (( rcm->rcrm_data_size + rncr->rncr_reply_data_size + ri->ri_coalesced_wr->rcwi_total_size) >
+    if (( rcm->rcrm_data_size + rncr->rncr_app_data.rncr_app_data_max_size + ri->ri_coalesced_wr->rcwi_total_size) >
         RAFT_ENTRY_MAX_DATA_SIZE(ri))
         raft_server_write_coalesced_entries(ri);
 
@@ -4536,7 +4536,7 @@ raft_server_client_rncr_write_raft_entry(
                                         &rncr->rncr_sm_write_supp);
 
     raft_server_write_coalesce_entry(ri, (void *)rcm->rcrm_data, rcm->rcrm_data_size,
-                                    (void *)rncr->rncr_reply, rncr->rncr_reply_data_size,
+                                    (void *)rncr->rncr_app_data.rncr_app_data_ptr, rncr->rncr_app_data.rncr_app_data_size,
                                     RAFT_WR_ENTRY_OPT_NONE);
 }
 
@@ -5086,8 +5086,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
               * as well. So store the rcrm_data_size value in temporary variable
               * first and restore it again.
               */
-             struct raft_net_client_request_handle *rncr_ptr = &rncr[i];
-             struct raft_client_rpc_msg *reply = (struct raft_client_rpc_msg *) rncr_ptr->rncr_reply;
+             struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
              uint32_t orig_rcrm_data_size = reply->rcrm_data_size;
 
              raft_server_client_reply_init(
