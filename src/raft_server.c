@@ -4323,7 +4323,8 @@ raft_server_net_client_request_init(
         //memset the reply_buf to make sure garbage values are not used from it.
         memset(reply_buf, 0, reply_buf_size);
 
-        rncr->rncr_reply.rncr_reply_ptr = reply_buf;
+        rncr->rncr_reply.rncr_reply_ptr =
+            (struct raft_client_rpc_msg  *)reply_buf;
     }
 
     CONST_OVERRIDE(size_t, rncr->rncr_reply.rncr_reply_data_max_size,
