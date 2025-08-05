@@ -325,9 +325,25 @@ struct raft_net_client_request_handle
     const struct raft_client_rpc_msg     *rncr_request;
     const char                           *rncr_request_or_commit_data;
     const size_t                          rncr_request_or_commit_data_size;
-    struct raft_client_rpc_msg           *rncr_reply;
-    const size_t                          rncr_reply_data_max_size;
-    size_t                                rncr_reply_data_size;
+
+    /*
+    The buffer acts dualy as reply to client or as an added data 
+    from the leader to other nodes in case of writes.
+    */
+    union { 
+        struct rncr_reply {
+            struct raft_client_rpc_msg   *rncr_reply_ptr;
+            const size_t                  rncr_reply_data_max_size;
+            size_t                        rncr_reply_data_size;
+        } rncr_reply;
+
+        struct rncr_app_data {
+            char                         *rncr_app_data_ptr;
+            const size_t                  rncr_app_data_max_size;
+            size_t                        rncr_app_data_size;
+        } rncr_app_data;
+    };
+    
     uint64_t                              rncr_msg_id;
     struct raft_net_sm_write_supplements  rncr_sm_write_supp;
     uuid_t                                rncr_client_uuid;
@@ -578,8 +594,8 @@ raft_client_net_request_handle_error_set(
     {
         rncr->rncr_op_error = rncr_op_err;
 
-        if (rncr->rncr_reply)
-            raft_client_msg_error_set(rncr->rncr_reply, reply_sys, reply_app);
+        if (rncr->rncr_reply.rncr_reply_ptr)
+            raft_client_msg_error_set(rncr->rncr_reply.rncr_reply_ptr, reply_sys, reply_app);
     }
 }
 
@@ -636,8 +652,8 @@ raft_net_client_request_handle_has_reply_info(
          uuid_is_null(rncr->rncr_client_uuid) ||
          rncr->rncr_msg_id == ID_ANY_64bit ||
          rncr->rncr_msg_id == 0 ||
-         rncr->rncr_reply_data_max_size == 0 ||
-         rncr->rncr_reply == NULL);
+         rncr->rncr_reply.rncr_reply_data_max_size == 0 ||
+         rncr->rncr_reply.rncr_reply_ptr == NULL);
 
     return !doesnt_have_info;
 }
@@ -646,21 +662,21 @@ static inline char *
 raft_net_client_request_handle_reply_data_map(
     struct raft_net_client_request_handle *rncr, const size_t size)
 {
-    if (!rncr || !size || !rncr->rncr_reply)
+    if (!rncr || !size || !rncr->rncr_reply.rncr_reply_ptr)
         return NULL;
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
-    NIOVA_ASSERT(reply->rcrm_data_size <= rncr->rncr_reply_data_max_size);
+    NIOVA_ASSERT(reply->rcrm_data_size <= rncr->rncr_reply.rncr_reply_data_max_size);
 
-    if ((reply->rcrm_data_size + size) > rncr->rncr_reply_data_max_size ||
-        (rncr->rncr_reply_data_size + size) > rncr->rncr_reply_data_max_size)
+    if ((reply->rcrm_data_size + size) > rncr->rncr_reply.rncr_reply_data_max_size ||
+        (rncr->rncr_reply.rncr_reply_data_size + size) > rncr->rncr_reply.rncr_reply_data_max_size)
         return NULL;
 
-    char *buf = &reply->rcrm_data[rncr->rncr_reply_data_size];
+    char *buf = &reply->rcrm_data[rncr->rncr_reply.rncr_reply_data_size];
 
     reply->rcrm_data_size += size;
-    rncr->rncr_reply_data_size += size;
+    rncr->rncr_reply.rncr_reply_data_size += size;
 
     return buf;
 }

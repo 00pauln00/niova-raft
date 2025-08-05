@@ -169,8 +169,8 @@ static int
 rst_sm_handler_commit(struct raft_net_client_request_handle *rncr)
 {
     NIOVA_ASSERT(
-        rncr && rncr->rncr_request_or_commit_data && rncr->rncr_reply &&
-        (rncr->rncr_reply_data_max_size <=
+        rncr && rncr->rncr_request_or_commit_data && rncr->rncr_reply.rncr_reply_ptr &&
+        (rncr->rncr_reply.rncr_reply_data_max_size <=
          raft_net_max_rpc_size(RAFT_INSTANCE_STORE_POSIX_FLAT_FILE)) &&
         !raft_net_client_request_handle_writes_raft_entry(rncr));
 
@@ -207,7 +207,7 @@ rst_sm_handler_commit(struct raft_net_client_request_handle *rncr)
         raft_net_client_request_handle_set_reply_info(rncr, sm->smn_uuid,
                                                       sma->smna_pending_msg_id);
 
-        int rc = rst_sm_reply_init(rncr->rncr_reply, sm->smn_uuid,
+        int rc = rst_sm_reply_init(rncr->rncr_reply.rncr_reply_ptr, sm->smn_uuid,
                                    RAFT_TEST_DATA_OP_WRITE, NULL, 0);
         FATAL_IF((rc), "rst_sm_reply_init(): %s", strerror(-rc));
     }
@@ -240,7 +240,7 @@ rst_sm_handler_write(struct raft_net_client_request_handle *rncr)
                  rncr->rncr_type == RAFT_NET_CLIENT_REQ_TYPE_WRITE &&
                  !raft_net_client_request_handle_writes_raft_entry(rncr));
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
     // Map the raft_test_data_block from the request data
     const struct raft_client_rpc_msg *request = rncr->rncr_request;
@@ -366,13 +366,13 @@ rst_sm_handler_read(struct raft_net_client_request_handle *rncr)
                  rncr->rncr_type == RAFT_NET_CLIENT_REQ_TYPE_READ &&
                  !raft_net_client_request_handle_writes_raft_entry(rncr));
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
     // Errors returned here are service related, not application related
     if (!reply)
         return -EINVAL;
 
-    else if (rncr->rncr_reply_data_max_size < sizeof(struct raft_test_values))
+    else if (rncr->rncr_reply.rncr_reply_data_max_size < sizeof(struct raft_test_values))
         return -ENOSPC;
 
     const struct raft_client_rpc_msg *rrm = rncr->rncr_request;
@@ -414,11 +414,11 @@ static int
 rst_sm_handler_verify_request_and_set_type(
     struct raft_net_client_request_handle *rncr)
 {
-    if (!rncr || !rncr->rncr_request || !rncr->rncr_reply ||
+    if (!rncr || !rncr->rncr_request || !rncr->rncr_reply.rncr_reply_ptr ||
         rncr->rncr_type != RAFT_NET_CLIENT_REQ_TYPE_NONE)
         return -EINVAL;
 
-    struct raft_client_rpc_msg *reply = rncr->rncr_reply;
+    struct raft_client_rpc_msg *reply = rncr->rncr_reply.rncr_reply_ptr;
 
     const struct raft_client_rpc_msg *request = rncr->rncr_request;
 
@@ -490,7 +490,7 @@ raft_server_test_rst_sm_handler(struct raft_net_client_request_handle *rncr)
         return -EINVAL;
 
     // Check for the minimum space requirements here.
-    else if (rncr->rncr_reply_data_max_size <
+    else if (rncr->rncr_reply.rncr_reply_data_max_size <
              sizeof(struct raft_test_data_block))
         return -ENOSPC;
 
