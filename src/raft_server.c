@@ -4518,7 +4518,7 @@ raft_server_client_rncr_write_raft_entry(
      * accomodating this request. Otherwise first flush the entries in
      * coalesced buffer.
      */
-    if (( rcm->rcrm_data_size + rncr->rncr_app_data.rncr_app_data_max_size + ri->ri_coalesced_wr->rcwi_total_size) >
+    if (( rcm->rcrm_data_size + rncr->rncr_app_data.rncr_app_data_size + ri->ri_coalesced_wr->rcwi_total_size) >
         RAFT_ENTRY_MAX_DATA_SIZE(ri))
         raft_server_write_coalesced_entries(ri);
 
