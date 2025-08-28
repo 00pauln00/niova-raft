@@ -2309,6 +2309,7 @@ rsbr_destroy(struct raft_instance *ri)
 
     if (rir->rir_db)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "rocksdb_close\n");
         rocksdb_close(rir->rir_db);
 
         // User must call raft_server_rocksdb_release_cf_table()
@@ -2574,6 +2575,7 @@ rsbr_db_open_internal(const struct raft_instance *ri,
     NIOVA_ASSERT(ri->ri_proc_state == RAFT_PROC_STATE_BOOTING ||
                  ri->ri_proc_state == RAFT_PROC_STATE_RECOVERING);
 
+    SIMPLE_LOG_MSG(LL_WARN, "rsbr_db_open_internal, create_db: %d\n", create_db);
     if (create_db)
         rocksdb_options_set_create_if_missing(rir->rir_options, 1);
 
@@ -2599,6 +2601,7 @@ rsbr_db_open_internal(const struct raft_instance *ri,
     // Set prefix extractor for range queries
     rocksdb_options_set_prefix_extractor(rir->rir_options, NULL);
     char *err = NULL;
+    SIMPLE_LOG_MSG(LL_WARN, "cft && cft->rsrcfe_num_cf: %d\n", cft && cft->rsrcfe_num_cf);
     rir->rir_db = (cft && cft->rsrcfe_num_cf) ?
         rocksdb_open_column_families(rir->rir_options, rocksdb_dir,
                                      cft->rsrcfe_num_cf, cft->rsrcfe_cf_names,
@@ -2678,8 +2681,11 @@ rsbr_db_open(struct raft_instance *ri, struct raft_instance_rocks_db *rir)
 
     int rc = rsbr_db_open_internal(ri, rir, false);
 
+    SIMPLE_LOG_MSG(LL_WARN, "rc: %d, recovering: %d\n", rc, recovering);
+
     if (rc && !recovering) // Try to 'create' the db if the first open failed
     {
+        SIMPLE_LOG_MSG(LL_WARN, "Try to 'create' the db if the first open failed\n");
         rc = rsbr_db_open_internal(ri, rir, true);
         if (!rc)
         {
