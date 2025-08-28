@@ -1395,7 +1395,7 @@ raft_client_test_lreg_init(struct raft_instance *ri)
 int
 main(int argc, char **argv)
 {
-    struct raft_instance *ri = raft_net_get_instance();
+    struct raft_instance *ri = raft_net_init_instance();
 
     rsc_getopt(argc, argv);
 
@@ -1429,5 +1429,7 @@ main(int argc, char **argv)
 
     rc = rsc_main_loop(ri);
 
+    raft_net_destroy_instance(ri);
+    
     exit(rc);
 }
