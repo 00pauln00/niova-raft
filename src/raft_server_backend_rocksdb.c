@@ -634,7 +634,7 @@ rsbr_entry_header_write_recovery_scrub(struct raft_instance *ri,
                            entry_header_key_len, (const char *)reh,
                            sizeof(struct raft_entry_header));
     char *err = NULL;
-    // Always use synchronous writes here.
+
     rocksdb_write(rir->rir_db, rir->rir_writeoptions_async,
                   rir->rir_writebatch, &err);
 
