@@ -4987,10 +4987,6 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     sink_bi = buffer_set_allocate_item(&ri->ri_buf_set[RAFT_BUF_SET_LARGE]);
     NIOVA_ASSERT(sink_bi);
 
-    /* Signify that the entry will be applied.  Prepare the last-applied values
-     * prior to entering raft_server_sm_apply_opt().
-     */
-    raft_server_last_applied_increment(ri, &reh);
 
     // Read the raft entry
     if (!reh.reh_leader_change_marker && reh.reh_data_size)
@@ -5002,12 +4998,6 @@ raft_server_state_machine_apply(struct raft_instance *ri)
                                    strerror(-rc));
     }
 
-    /*
-     * Use single entry of write suppliement for each rncr objects to
-     * make sure all coalesced write entries are part of same write supplement
-     * structure.
-     */
-    struct raft_net_sm_write_supplements coalesced_ws = {0, NULL};
     bool failed = false;
 
     uint32_t offset = 0;
@@ -5033,17 +5023,18 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         if (rc_arr[i])
             failed = true;
 
-        raft_net_sm_write_supplements_merge(&coalesced_ws,
-                                            &rncr_ptr->rncr_sm_write_supp);
+        // Called regardless of ri_server_sm_request_cb() error
+        raft_server_sm_apply_opt(ri, &rncr_ptr->rncr_sm_write_supp);
 
         offset += reh.reh_entry_sz[i];
     }
 
-    if (!reh.reh_leader_change_marker && reh.reh_data_size)
-    {
-        // Called regardless of ri_server_sm_request_cb() error
-        raft_server_sm_apply_opt(ri, &coalesced_ws);
-    }
+    /* Increment the ri_last_applied_idx and update the cumulative CRC.
+     * This is done after all SM requests have been processed to ensure
+     * that the SM has successfully processed the entry.
+     */
+    raft_server_last_applied_increment(ri, &reh);
+    raft_server_sm_apply_opt(ri, NULL);
 
     if (!failed && raft_instance_is_leader(ri))
     {
@@ -5104,7 +5095,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
 
     // All rncr entries were using single ws structure.
     // The destructor may issue a callback into the SM.
-    raft_net_sm_write_supplement_destroy(&coalesced_ws);
+    //raft_net_sm_write_supplement_destroy(&coalesced_ws);
 
     if (!reh.reh_leader_change_marker && !reh.reh_data_size)
         DBG_RAFT_ENTRY(LL_WARN, &reh, "application entry contains no data!");
