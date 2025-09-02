@@ -4892,7 +4892,7 @@ static raft_server_epoll_sm_apply_t
 raft_server_sm_apply_opt(struct raft_instance *ri,
                          struct raft_net_sm_write_supplements *ws)
 {
-    NIOVA_ASSERT(ri && ws);
+    NIOVA_ASSERT(ri);
 
     if (ri->ri_backend->rib_sm_apply_opt)
         ri->ri_backend->rib_sm_apply_opt(ri, ws);
@@ -5092,10 +5092,6 @@ raft_server_state_machine_apply(struct raft_instance *ri)
              reply->rcrm_data_size = orig_rcrm_data_size;
          }
     }
-
-    // All rncr entries were using single ws structure.
-    // The destructor may issue a callback into the SM.
-    //raft_net_sm_write_supplement_destroy(&coalesced_ws);
 
     if (!reh.reh_leader_change_marker && !reh.reh_data_size)
         DBG_RAFT_ENTRY(LL_WARN, &reh, "application entry contains no data!");
