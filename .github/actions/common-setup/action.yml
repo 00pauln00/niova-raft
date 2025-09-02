@@ -1,0 +1,65 @@
+name: Common CI Setup
+description: Sets up environment and dependencies for Niova-Raft CI workflows.
+runs:
+    using: "composite"
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: apt update
+      run: sudo apt update
+      shell: bash
+
+    - name: dpkg / rpm prep
+      run: sudo -E apt-get install -y uuid-dev uuid libuuid1 libgcrypt20 openssl libssl-dev `apt-cache search librocksdb | awk '{print $1}'` uncrustify libasan5 libtsan0
+      shell: bash
+
+# Install python libraries
+    - name: Install python libraries
+      run:  pip3 install setuptools wheel func_timeout sockets psutil dpath jmespath
+      shell: bash
+
+# Install Ansible
+    - name: Install Ansible
+      run:  pip3 install ansible==9.2
+      shell: bash
+
+    - name: Build Dir
+      run:  mkdir -p /home/runner/work/niovad/niovad/build_dir/
+      shell: bash
+
+#
+#### Submodule Bits
+# submodule init
+    - name: submodule init
+      run: git submodule update --init --recursive
+      shell: bash
+
+# niova-core submodule init
+    - name: submodule init (niova-core)
+      run: cd modules/niova-core && git submodule init && git submodule update
+      shell: bash
+
+# build niova-core
+    - name: build niova-core
+      run: cd modules/niova-core/ && ./prepare.sh &&
+        ./configure --enable-devel --enable-asan --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
+        make && make check && make install
+      shell: bash
+
+#
+#### End Submodule Bits
+#
+    - name: make
+      run: ./prepare.sh &&
+           ./configure --enable-devel --enable-asan --with-niova=/home/runner/work/niovad/niovad/build_dir/ --prefix=/home/runner/work/niovad/niovad/build_dir/ &&
+           make && make check && make install
+      shell: bash
+      env:
+        LD_LIBRARY_PATH: /home/runner/work/niovad/niovad/build_dir/lib
+
+# GCOV Setup
+    - name: Create dir for cover data counters, metadata to be placed
+      run: mkdir  /home/runner/work/niovad/niovad/code_cov &&
+           export GOCOVERDIR=/work/niovad/niovad/code_cov
+      shell: bash
