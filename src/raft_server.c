@@ -5040,6 +5040,13 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         raft_server_sm_apply_opt(ri, &coalesced_ws);
     }
 
+    if (FAULT_INJECT(raft_server_atomicity_check)){
+    SIMPLE_LOG_MSG(LL_DEBUG, "fault injection applied for automicity check");
+    return;
+        }
+
+    
+
     if (!failed && raft_instance_is_leader(ri))
     {
         if (reh.reh_term == ri->ri_log_hdr.rlh_term)
