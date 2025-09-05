@@ -4920,7 +4920,8 @@ raft_server_net_client_request_init_sm_apply(
 void
 raft_server_backend_setup_last_applied(struct raft_instance *ri,
                                        raft_entry_idx_t last_applied_idx,
-                                       crc32_t last_applied_cumulative_crc)
+                                       crc32_t last_applied_cumulative_crc,
+                                       uint64_t advanced_sub_apply_idx)
 {
     NIOVA_ASSERT(ri && (raft_instance_is_booting(ri) ||
                         raft_instance_is_recovering(ri)));
@@ -4928,6 +4929,7 @@ raft_server_backend_setup_last_applied(struct raft_instance *ri,
     ri->ri_last_applied_idx = last_applied_idx;
     ri->ri_last_applied_synced_idx = last_applied_idx;
     ri->ri_last_applied_cumulative_crc = last_applied_cumulative_crc;
+    ri->ri_advanced_sub_apply_idx = advanced_sub_apply_idx;
 
     DBG_RAFT_INSTANCE(LL_TRACE, ri, "");
 }
@@ -4938,7 +4940,8 @@ raft_server_last_applied_increment(struct raft_instance *ri,
 {
     NIOVA_ASSERT(ri && reh &&
                  (reh->reh_index == (ri->ri_last_applied_idx + 1)));
-
+    
+    ri->ri_advanced_sub_apply_idx = 0;
     ri->ri_last_applied_idx++;
     ri->ri_last_applied_cumulative_crc ^= reh->reh_crc;
 
@@ -4962,6 +4965,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     const size_t reply_buf_sz = RAFT_BS_SMALL_SZ;
 
     const raft_entry_idx_t apply_idx = ri->ri_last_applied_idx + 1;
+    uint64_t apply_idx_offset = ri->ri_advanced_sub_apply_idx;
 
     struct raft_entry_header reh = {0};
 
@@ -5005,7 +5009,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     char *reply_buf;
     struct raft_net_client_request_handle *rncr_ptr;
 
-    for (uint32_t i = 0;
+    for (uint32_t i = apply_idx_offset;
          i < reh.reh_num_entries && !reh.reh_leader_change_marker &&
              reh.reh_data_size;
          i++)
@@ -5023,9 +5027,16 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         if (rc_arr[i])
             failed = true;
 
+        SIMPLE_LOG_MSG(LL_WARN, "SM applied entry index=%ld",
+                       reh.reh_index);
+        ri->ri_advanced_sub_apply_idx = i + 1;
+        
         // Called regardless of ri_server_sm_request_cb() error
         raft_server_sm_apply_opt(ri, &rncr_ptr->rncr_sm_write_supp);
-
+        
+        if (FAULT_INJECT(raft_sub_apply))
+            SIMPLE_LOG_MSG(LL_FATAL, "sub-apply at entry %u", i);
+            
         offset += reh.reh_entry_sz[i];
     }
 
@@ -5426,6 +5437,7 @@ raft_server_instance_init(struct raft_instance *ri,
         opts & RAFT_INSTANCE_OPTIONS_AUTO_CHECKPOINT ? true : false;
 
     ri->ri_commit_idx = -1;
+    ri->ri_advanced_sub_apply_idx = 0;
     ri->ri_last_applied_idx = -1;
     ri->ri_last_applied_synced_idx = -1;
     ri->ri_checkpoint_last_idx = -1;
