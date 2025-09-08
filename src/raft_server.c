@@ -5033,6 +5033,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         
         // Called regardless of ri_server_sm_request_cb() error
         raft_server_sm_apply_opt(ri, &rncr_ptr->rncr_sm_write_supp);
+        raft_net_sm_write_supplement_destroy(&rncr_ptr->rncr_sm_write_supp);
         
         if (FAULT_INJECT(raft_sub_apply))
             SIMPLE_LOG_MSG(LL_FATAL, "sub-apply at entry %u", i);
