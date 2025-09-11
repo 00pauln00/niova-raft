@@ -5039,12 +5039,6 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         // Called regardless of ri_server_sm_request_cb() error
         raft_server_sm_apply_opt(ri, &coalesced_ws);
     }
-
-    if (FAULT_INJECT(raft_server_atomicity_check)){
-    SIMPLE_LOG_MSG(LL_DEBUG, "fault injection applied for automicity check");
-    return;
-        }
-
     
 
     if (!failed && raft_instance_is_leader(ri))
