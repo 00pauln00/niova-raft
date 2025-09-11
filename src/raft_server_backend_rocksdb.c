@@ -602,6 +602,11 @@ rsbr_sm_apply_opt(struct raft_instance *ri,
      */
     rocksdb_write(rir->rir_db, rir->rir_writeoptions_async,
                   rir->rir_writebatch, &err);
+                  
+    if (FAULT_INJECT(raft_server_atomicity_check)){
+    SIMPLE_LOG_MSG(LL_FATAL, "fault injection applied for automicity check and process aborted");
+    abort();
+    }
 
     DBG_RAFT_INSTANCE_FATAL_IF((err), ri, "rocksdb_write():  %s", err);
 
