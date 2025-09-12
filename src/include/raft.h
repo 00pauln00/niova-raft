@@ -541,10 +541,11 @@ struct raft_instance
     int                             ri_timer_fd;
     char                            ri_log[PATH_MAX + 1];
     struct raft_log_header          ri_log_hdr;
-    int64_t                         ri_commit_idx;
-    uint64_t                        ri_advanced_sub_apply_idx;
-    int64_t                         ri_last_applied_idx;
-    int64_t                         ri_last_applied_synced_idx;
+    raft_entry_idx_t                ri_commit_idx;
+    raft_entry_idx_t                ri_last_applied_idx;
+    raft_entry_idx_t                ri_last_applied_sub_idx;
+    raft_entry_idx_t                ri_last_applied_sub_idx_max;
+    raft_entry_idx_t                ri_last_applied_synced_idx;
     crc32_t                         ri_last_applied_cumulative_crc;
     raft_chkpt_thread_atomic64_t    ri_checkpoint_last_idx;
     raft_chkpt_thread_atomic64_t    ri_lowest_idx; // set by log reap
@@ -1173,8 +1174,9 @@ raft_server_instance_run(const char *raft_uuid_str,
 void
 raft_server_backend_setup_last_applied(struct raft_instance *ri,
                                        raft_entry_idx_t last_applied_idx,
-                                       crc32_t last_applied_cumulative_crc,
-                                       uint64_t advanced_sub_apply_idx);
+                                       raft_entry_idx_t last_applied_sub_idx,
+                                       raft_entry_idx_t last_applied_sub_idx_max,
+                                       crc32_t last_applied_cumulative_crc);
 
 int
 raft_server_init_recovery_handle_from_marker(struct raft_instance *ri,
