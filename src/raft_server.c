@@ -5039,6 +5039,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         // Called regardless of ri_server_sm_request_cb() error
         raft_server_sm_apply_opt(ri, &coalesced_ws);
     }
+    
 
     if (!failed && raft_instance_is_leader(ri))
     {
