@@ -502,14 +502,12 @@ rsbr_write_supplements_put(const struct raft_net_sm_write_supplements *ws,
 
 static void
 rsb_sm_apply_add_last_applied_kv(struct raft_instance_rocks_db *rir,
-                                 const raft_entry_idx_t apply_idx,
-                                 const raft_entry_idx_t apply_sub_idx,
-                                 const raft_entry_idx_t apply_sub_idx_max,
+                                 struct raft_last_applied_bk *rlab,
                                  uint64_t apply_cumu_crc)
 {
     NIOVA_ASSERT(rir);
 
-    uint64_t vals[4] = {apply_idx, apply_sub_idx, apply_sub_idx_max, apply_cumu_crc};
+    uint64_t vals[4] = {rlab->rlab_idx, rlab->rlab_sub_idx, rlab->rlab_sub_idx_max, apply_cumu_crc};
 
     rocksdb_writebatch_put(rir->rir_writebatch,
                            RAFT_LOG_HEADER_LAST_APPLIED_ROCKSDB,
@@ -542,9 +540,7 @@ rsb_sm_get_last_applied_kv_idx(struct raft_instance *ri)
         DBG_RAFT_INSTANCE(LL_WARN, ri, "rsbr-last-applied-idx=%ld crc=%x",
                           vals[0], (crc32_t)vals[1]);
 
-        raft_server_backend_setup_last_applied(ri, (raft_entry_idx_t)vals[0],
-                                                (raft_entry_idx_t)vals[1],
-                                                (uint32_t)vals[2],
+        raft_server_backend_setup_last_applied(ri, (struct raft_last_applied_bk *) &vals,
                                                 (crc32_t)vals[3]);
     }
 }
@@ -580,19 +576,16 @@ rsbr_sm_apply_opt(struct raft_instance *ri,
     NIOVA_ASSERT(ri);
 
     DBG_RAFT_INSTANCE(LL_DEBUG, ri, "idx=%ld cumu-crc=%x",
-                      ri->ri_last_applied_idx,
+                      ri->ri_last_applied.rlab_idx,
                       ri->ri_last_applied_cumulative_crc);
 
     const uint64_t la_crc = ri->ri_last_applied_cumulative_crc;
-    const raft_entry_idx_t la_idx = ri->ri_last_applied_idx;
-    const raft_entry_idx_t la_sub_idx = ri->ri_last_applied_sub_idx;
-    const uint32_t la_sub_idx_max = ri->ri_last_applied_sub_idx_max;
 
     struct raft_instance_rocks_db *rir = rsbr_ri_to_rirdb(ri);
 
     rocksdb_writebatch_clear(rir->rir_writebatch);
 
-    rsb_sm_apply_add_last_applied_kv(rir, la_idx, la_sub_idx, la_sub_idx_max, la_crc);
+    rsb_sm_apply_add_last_applied_kv(rir, &ri->ri_last_applied, la_crc);
 
     // Attach any supplemental writes to the rocksdb-writebatch
     rsbr_write_supplements_put(ws, rir->rir_writebatch);
