@@ -5437,8 +5437,8 @@ raft_server_instance_init(struct raft_instance *ri,
     ri->ri_commit_idx = -1;
     ri->ri_last_applied = (struct raft_last_applied_bk) {
         .rlab_idx = -1,
-        .rlab_sub_idx = -1,
-        .rlab_sub_idx_max = -1
+        .rlab_sub_idx = 0,
+        .rlab_sub_idx_max = 0
     };
     ri->ri_last_applied_synced_idx = -1;
     ri->ri_checkpoint_last_idx = -1;

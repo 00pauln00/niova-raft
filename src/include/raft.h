@@ -510,8 +510,8 @@ struct raft_rw_worker_thread
 struct raft_last_applied_bk
 {
     raft_entry_idx_t        rlab_idx;
-    raft_entry_idx_t        rlab_sub_idx;
-    raft_entry_idx_t        rlab_sub_idx_max;
+    uint32_t                rlab_sub_idx;
+    uint32_t                rlab_sub_idx_max;
 };
 
 struct raft_instance
