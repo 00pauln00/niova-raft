@@ -5048,6 +5048,9 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     // along with apply from the application.
     if (reh.reh_leader_change_marker || !reh.reh_data_size) {
         raft_server_set_last_applied(ri, &nai);
+        raft_server_sm_apply_opt(ri, NULL);
+        if (raft_server_needs_apply(ri))
+            RAFT_NET_EVP_NOTIFY_NO_FAIL(ri, RAFT_EVP_SM_APPLY);
         return;
     }
 
@@ -5102,12 +5105,16 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         
         if (!rc)
             raft_server_init_send_reply(ri, rncr);
+
+        if (FAULT_INJECT(raft_server_fail_partial_apply))
+            SIMPLE_LOG_MSG(LL_FATAL, "Failing after apply at index:%ld sub:%d",
+                           nai.rla_idx, nai.rla_sub_idx - 1);
     }
     
     NIOVA_ASSERT(ri->ri_last_applied.rla_sub_idx ==
                  ri->ri_last_applied.rla_sub_idx_max);
 
-    // Update the metrics
+    // Update the commit latency metric
     if (!failed && raft_instance_is_leader(ri))
     {
         if (reh.reh_term == ri->ri_log_hdr.rlh_term)
