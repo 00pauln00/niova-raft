@@ -284,11 +284,11 @@ raft_instance_lreg_multi_facet_cb(enum lreg_node_cb_ops op,
             break;
         case RAFT_LREG_LAST_APPLIED:
             lreg_value_fill_signed(lv, "last-applied",
-                                   ri->ri_last_applied.rlab_idx);
+                                   ri->ri_last_applied.rla_idx);
             break;
         case RAFT_LREG_LAST_APPLIED_CCRC:
             lreg_value_fill_signed(lv, "last-applied-cumulative-crc",
-                                   ri->ri_last_applied_cumulative_crc);
+                                   ri->ri_last_applied.rla_cumulative_crc);
             break;
         case RAFT_LREG_NEWEST_ENTRY_IDX:
             lreg_value_fill_signed(
@@ -1270,7 +1270,7 @@ raft_server_backend_sync(struct raft_instance *ri, const char *caller)
     NIOVA_ASSERT(!pthread_mutex_lock(&mutex));
 
     // copy last_applied_idx since it be incremented outside this thread
-    const int64_t my_last_applied_idx = ri->ri_last_applied.rlab_idx;
+    const int64_t my_last_applied_idx = ri->ri_last_applied.rla_idx;
 
     // Grab the unsync'd header contents
     struct raft_entry_header unsync_reh = {0};
@@ -1303,10 +1303,10 @@ raft_server_backend_sync(struct raft_instance *ri, const char *caller)
                                               false);
 
     // update the last-applied-syncd-idx
-    NIOVA_ASSERT(ri->ri_last_applied.rlab_idx >= ri->ri_last_applied_synced_idx);
-    NIOVA_ASSERT(my_last_applied_idx >= ri->ri_last_applied_synced_idx);
-    if (ri->ri_last_applied_synced_idx < my_last_applied_idx)
-        ri->ri_last_applied_synced_idx = my_last_applied_idx;
+    NIOVA_ASSERT(ri->ri_last_applied.rla_idx >= ri->ri_last_applied.rla_synced_idx);
+    NIOVA_ASSERT(my_last_applied_idx >= ri->ri_last_applied.rla_synced_idx);
+    if (ri->ri_last_applied.rla_synced_idx < my_last_applied_idx)
+        ri->ri_last_applied.rla_synced_idx = my_last_applied_idx;
 
     NIOVA_ASSERT(!pthread_mutex_unlock(&mutex));
 
@@ -2172,7 +2172,7 @@ raft_leader_has_applied_txn_in_my_term(struct raft_instance *ri)
                                    "leader-term=%ld != log-hdr-term",
                                    rls->rls_leader_term);
 
-        return ri->ri_last_applied.rlab_idx > rls->rls_initial_term_idx ?
+        return ri->ri_last_applied.rla_idx > rls->rls_initial_term_idx ?
             true : false;
     }
 
@@ -2949,7 +2949,7 @@ raft_server_append_entry_log_prune_if_needed(
     // We must not prune already committed transactions.
     DBG_RAFT_INSTANCE_FATAL_IF(
         (ri->ri_commit_idx >= raft_entry_idx_prune ||
-         ri->ri_last_applied.rlab_idx >= raft_entry_idx_prune),
+         ri->ri_last_applied.rla_idx >= raft_entry_idx_prune),
         ri, "cannot prune committed entry raerq-nli=%ld",
         raft_entry_idx_prune);
 
@@ -4919,56 +4919,110 @@ raft_server_net_client_request_init_sm_apply(
  */
 void
 raft_server_backend_setup_last_applied(struct raft_instance *ri,
-                                       struct raft_last_applied_bk *rlab,
-                                       crc32_t last_applied_cumulative_crc)
+                                       struct raft_last_applied *rla)
 {
     NIOVA_ASSERT(ri && (raft_instance_is_booting(ri) ||
                         raft_instance_is_recovering(ri)));
 
-    ri->ri_last_applied = *rlab;
-    ri->ri_last_applied_synced_idx = rlab->rlab_idx;
-    ri->ri_last_applied_cumulative_crc = last_applied_cumulative_crc;
-
+    ri->ri_last_applied = *rla;
 }
 
 static raft_server_epoll_sm_apply_t
 raft_server_set_last_applied(struct raft_instance *ri,
-                            struct raft_last_applied_bk *next_apply_idx,
-                            crc32_t cumulative_crc)
+                            struct raft_last_applied *nai)
 {
     NIOVA_ASSERT(
-            ri && next_apply_idx &&
-            (next_apply_idx->rlab_idx >= ri->ri_last_applied.rlab_idx &&
-            next_apply_idx->rlab_sub_idx <= next_apply_idx->rlab_sub_idx_max));
+            ri && nai &&
+            (nai->rla_idx >= ri->ri_last_applied.rla_idx &&
+            nai->rla_sub_idx <= nai->rla_sub_idx_max));
 
-    ri->ri_last_applied.rlab_idx = next_apply_idx->rlab_idx;
-    ri->ri_last_applied.rlab_sub_idx = next_apply_idx->rlab_sub_idx;
-    ri->ri_last_applied.rlab_sub_idx_max = next_apply_idx->rlab_sub_idx_max;
-    ri->ri_last_applied_cumulative_crc = cumulative_crc;
+    ri->ri_last_applied.rla_idx = nai->rla_idx;
+    ri->ri_last_applied.rla_sub_idx = nai->rla_sub_idx;
+    ri->ri_last_applied.rla_sub_idx_max = nai->rla_sub_idx_max;
 
-    next_apply_idx->rlab_sub_idx++;
+    // The cumulative crc is supposed to updated for each sub entry apply
+    // However, for now the cumulative crc will be updated once all sub entries
+    // are applied.  
+    if (nai->rla_sub_idx == nai->rla_sub_idx_max)
+        ri->ri_last_applied.rla_cumulative_crc = nai->rla_cumulative_crc;
+    else
+        nai->rla_sub_idx++;
 }
 
 static bool
 raft_server_needs_apply(struct raft_instance *ri) {
     NIOVA_ASSERT(ri);
-    NIOVA_ASSERT(ri->ri_last_applied.rlab_idx <= ri->ri_commit_idx);
+    NIOVA_ASSERT(ri->ri_last_applied.rla_idx <= ri->ri_commit_idx);
 
-    return (ri->ri_last_applied.rlab_idx < ri->ri_commit_idx ||
-            (ri->ri_last_applied.rlab_idx == ri->ri_commit_idx &&
-             ri->ri_last_applied.rlab_sub_idx < ri->ri_last_applied.rlab_sub_idx_max));
+    return (ri->ri_last_applied.rla_idx < ri->ri_commit_idx ||
+            (ri->ri_last_applied.rla_idx == ri->ri_commit_idx &&
+             ri->ri_last_applied.rla_sub_idx < ri->ri_last_applied.rla_sub_idx_max));
 }
 
-static void raft_server_next_apply_idx(struct raft_instance *ri, struct raft_last_applied_bk *next_apply_idx) {
-    NIOVA_ASSERT(ri && next_apply_idx);
-    *next_apply_idx = ri->ri_last_applied;
-    if (next_apply_idx->rlab_sub_idx == next_apply_idx->rlab_sub_idx_max) {
-        next_apply_idx->rlab_sub_idx = 0;
-        next_apply_idx->rlab_sub_idx_max = 0;
-        next_apply_idx->rlab_idx++;
+static void raft_server_next_apply_idx(struct raft_instance *ri, struct raft_last_applied *nai) {
+    NIOVA_ASSERT(ri && nai);
+    *nai = ri->ri_last_applied;
+    if (nai->rla_sub_idx == nai->rla_sub_idx_max) {
+        nai->rla_sub_idx = 0;
+        nai->rla_sub_idx_max = 0;
+        nai->rla_idx++;
     } else {
-        next_apply_idx->rlab_sub_idx++;
+        nai->rla_sub_idx++;
     }
+}
+
+static void raft_server_get_raft_header_to_apply(struct raft_instance *ri, struct raft_last_applied *nai, 
+                                            struct raft_entry_header *reh) {
+    NIOVA_ASSERT(ri && nai && reh);
+    raft_server_next_apply_idx(ri, nai);
+    int rc = raft_server_entry_header_read_by_store(ri, reh, nai->rla_idx);
+    DBG_RAFT_INSTANCE_FATAL_IF((rc), ri,
+                               "raft_server_entry_header_read_by_store(): %s",
+                               strerror(-rc));
+
+    // Sanity checks incase of recovery after partial apply failure
+    // the maximum of sub idx should be equal to the number of entries - 1
+    if (ri->ri_last_applied.rla_sub_idx != ri->ri_last_applied.rla_sub_idx_max)
+        NIOVA_ASSERT(reh->reh_num_entries == ri->ri_last_applied.rla_sub_idx_max + 1);
+
+    //Update max entries and crc in the next apply idx
+    nai->rla_sub_idx_max = reh->reh_num_entries - 1;
+    nai->rla_cumulative_crc = reh->reh_crc;
+}
+
+static void raft_server_init_send_reply(struct raft_instance *ri, struct raft_net_client_request_handle rncr) {
+    NIOVA_ASSERT(ri);
+    /* Perform basic initialization on the reply buffer if the SM has
+    * provided the necessary info for completing the reply.  The SM
+    * would have called
+    * raft_net_client_request_handle_set_reply_info() if the necessary
+    * info was provided.  Note that the SM may not check for leader
+    * status, so the reply info may be provided even when this node
+    * is a follower.  Therefore, udp init should be bypassed if this
+    * node is not the leader.
+    */
+    if (raft_instance_is_leader(ri) &&
+        raft_net_client_request_handle_has_reply_info(&rncr) &&
+        uuid_compare(rncr.rncr_client_uuid,
+                    ri->ri_csn_this_peer->csn_uuid))
+    {
+        /* rncr and rcrm_data_size gets populated in
+        * ri_server_sm_request_cb. raft_server_client_reply_init()
+        * memset's rncr_reply which will overwrite the rcrm_data_size
+        * as well. So store the rcrm_data_size value in temporary variable
+        * first and restore it again.
+        */
+        struct raft_client_rpc_msg *reply = rncr.rncr_reply.rncr_reply_ptr;
+        uint32_t orig_rcrm_data_size = reply->rcrm_data_size;
+
+        raft_server_client_reply_init(
+            ri, &rncr, RAFT_CLIENT_RPC_MSG_TYPE_REPLY);
+
+        reply->rcrm_data_size = orig_rcrm_data_size;
+
+        raft_server_reply_to_client(ri, &rncr, NULL);
+    }
+
 }
 
 static raft_server_epoll_sm_apply_bool_t
@@ -4984,27 +5038,16 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     if (FAULT_INJECT(raft_server_bypass_sm_apply))
         return;
 
-    // Read the raft entry header for the to be applied index
-    struct raft_last_applied_bk next_apply_idx;
-    raft_server_next_apply_idx(ri, &next_apply_idx);
+    // Read the raft entry header for the next apply index
+    struct raft_last_applied nai;
     struct raft_entry_header reh = {0};
-    int rc = raft_server_entry_header_read_by_store(ri, &reh, next_apply_idx.rlab_idx);
-    DBG_RAFT_INSTANCE_FATAL_IF((rc), ri,
-                               "raft_server_entry_header_read_by_store(): %s",
-                               strerror(-rc));
+    raft_server_get_raft_header_to_apply(ri, &nai, &reh);
     
-    if (!reh.reh_leader_change_marker && !reh.reh_data_size)
-        DBG_RAFT_ENTRY(LL_WARN, &reh, "application entry contains no data!");
-
-    // Sanity checks incase of recovery after partial apply failure
-    // the maximum of sub idx should be equal to the number of entries - 1
-    if (ri->ri_last_applied.rlab_sub_idx != ri->ri_last_applied.rlab_sub_idx_max)
-        NIOVA_ASSERT(reh.reh_num_entries == ri->ri_last_applied.rlab_sub_idx_max + 1);
-    
-    // If its the leader marker only update 
+    // If its the leader marker only update the last_applied index
+    // and return, persisting the last applied index will be done later
+    // along with apply from the application.
     if (reh.reh_leader_change_marker || !reh.reh_data_size) {
-        raft_server_set_last_applied(ri, &next_apply_idx,
-                                     ri->ri_last_applied_cumulative_crc ^ reh.reh_crc);
+        raft_server_set_last_applied(ri, &nai);
         return;
     }
 
@@ -5015,7 +5058,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     char *sink_buf = (char *)sink_bi->bi_iov.iov_base;
     
     // Read the raft entry data
-    rc = raft_server_entry_read(ri, next_apply_idx.rlab_idx,
+    int rc = raft_server_entry_read(ri, nai.rla_idx,
                                     sink_buf,
                                     reh.reh_data_size, NULL);
     DBG_RAFT_INSTANCE_FATAL_IF((rc), ri, "raft_server_entry_read(): %s",
@@ -5032,17 +5075,12 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     // Iterate over the entries apply and reply if needed
     bool failed = false;
     uint32_t offset = 0;
-    crc32_t cumulative_crc = ri->ri_last_applied_cumulative_crc ^ reh.reh_crc;
-    next_apply_idx.rlab_sub_idx_max = reh.reh_num_entries - 1;
 
-    SIMPLE_LOG_MSG(LL_ERROR, "Applying the idx %ld and commit %ld", next_apply_idx.rlab_idx, ri->ri_commit_idx);
-    for (uint32_t i = 0; i < reh.reh_num_entries; i++)
+    for (uint32_t i = 0; i < reh.reh_num_entries; i++, offset += reh.reh_entry_sz[i])
     {
         // Move the offset to next entry
-        if(i < next_apply_idx.rlab_sub_idx) {
-            offset += reh.reh_entry_sz[i];
+        if(i < nai.rla_sub_idx)
             continue;
-        }
 
 
         struct raft_net_client_request_handle rncr;
@@ -5058,47 +5096,16 @@ raft_server_state_machine_apply(struct raft_instance *ri)
 
         // Increment the sub applied idx and store it in the
         // persistent store.
-        raft_server_set_last_applied(ri, &next_apply_idx, cumulative_crc);
+        raft_server_set_last_applied(ri, &nai);
         raft_server_sm_apply_opt(ri, &rncr.rncr_sm_write_supp);
         raft_net_sm_write_supplement_destroy(&rncr.rncr_sm_write_supp);
-
-        /* Perform basic initialization on the reply buffer if the SM has
-        * provided the necessary info for completing the reply.  The SM
-        * would have called
-        * raft_net_client_request_handle_set_reply_info() if the necessary
-        * info was provided.  Note that the SM may not check for leader
-        * status, so the reply info may be provided even when this node
-        * is a follower.  Therefore, udp init should be bypassed if this
-        * node is not the leader.
-        */
-        if (!rc && raft_instance_is_leader(ri) &&
-            raft_net_client_request_handle_has_reply_info(&rncr) &&
-            uuid_compare(rncr.rncr_client_uuid,
-                        ri->ri_csn_this_peer->csn_uuid))
-        {
-            /* rncr and rcrm_data_size gets populated in
-            * ri_server_sm_request_cb. raft_server_client_reply_init()
-            * memset's rncr_reply which will overwrite the rcrm_data_size
-            * as well. So store the rcrm_data_size value in temporary variable
-            * first and restore it again.
-            */
-            struct raft_client_rpc_msg *reply = rncr.rncr_reply.rncr_reply_ptr;
-            uint32_t orig_rcrm_data_size = reply->rcrm_data_size;
-
-            raft_server_client_reply_init(
-                ri, &rncr, RAFT_CLIENT_RPC_MSG_TYPE_REPLY);
-
-            reply->rcrm_data_size = orig_rcrm_data_size;
-
-            raft_server_reply_to_client(ri, &rncr, NULL);
-        }
-    
-        // Move the offset to next entry
-        offset += reh.reh_entry_sz[i];
+        
+        if (!rc)
+            raft_server_init_send_reply(ri, rncr);
     }
     
-    NIOVA_ASSERT(ri->ri_last_applied.rlab_sub_idx ==
-                 ri->ri_last_applied.rlab_sub_idx_max);
+    NIOVA_ASSERT(ri->ri_last_applied.rla_sub_idx ==
+                 ri->ri_last_applied.rla_sub_idx_max);
 
     // Update the metrics
     if (!failed && raft_instance_is_leader(ri))
@@ -5435,12 +5442,12 @@ raft_server_instance_init(struct raft_instance *ri,
         opts & RAFT_INSTANCE_OPTIONS_AUTO_CHECKPOINT ? true : false;
 
     ri->ri_commit_idx = -1;
-    ri->ri_last_applied = (struct raft_last_applied_bk) {
-        .rlab_idx = -1,
-        .rlab_sub_idx = 0,
-        .rlab_sub_idx_max = 0
+    ri->ri_last_applied = (struct raft_last_applied) {
+        .rla_idx = -1,
+        .rla_sub_idx = 0,
+        .rla_sub_idx_max = 0,
+        .rla_synced_idx = -1
     };
-    ri->ri_last_applied_synced_idx = -1;
     ri->ri_checkpoint_last_idx = -1;
     ri->ri_pending_read_idx = -1;
     niova_atomic_init(&ri->ri_lowest_idx, -1);
