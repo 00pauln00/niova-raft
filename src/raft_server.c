@@ -4961,6 +4961,8 @@ raft_server_needs_apply(struct raft_instance *ri) {
 
 static void raft_server_next_apply_idx(struct raft_instance *ri, struct raft_last_applied *nai) {
     NIOVA_ASSERT(ri && nai);
+    NIOVA_ASSERT(ri->ri_last_applied.rla_sub_idx <= ri->ri_last_applied.rla_sub_idx_max);
+
     *nai = ri->ri_last_applied;
     if (nai->rla_sub_idx == nai->rla_sub_idx_max) {
         nai->rla_sub_idx = 0;
@@ -4975,6 +4977,7 @@ static void raft_server_get_raft_header_to_apply(struct raft_instance *ri, struc
                                             struct raft_entry_header *reh) {
     NIOVA_ASSERT(ri && nai && reh);
     raft_server_next_apply_idx(ri, nai);
+
     int rc = raft_server_entry_header_read_by_store(ri, reh, nai->rla_idx);
     DBG_RAFT_INSTANCE_FATAL_IF((rc), ri,
                                "raft_server_entry_header_read_by_store(): %s",
@@ -5039,7 +5042,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         return;
 
     // Read the raft entry header for the next apply index
-    struct raft_last_applied nai;
+    struct raft_last_applied nai = {0};
     struct raft_entry_header reh = {0};
     raft_server_get_raft_header_to_apply(ri, &nai, &reh);
     
