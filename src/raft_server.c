@@ -5536,7 +5536,7 @@ raft_server_instance_lreg_init(struct raft_instance *ri)
     for (enum raft_instance_hist_types i = RAFT_INSTANCE_HIST_MIN;
          i < RAFT_INSTANCE_HIST_MAX; i++)
     {
-        enum lreg_user_types x = i + LREG_USER_TYPE_HISTOGRAM__MIN;
+        enum lreg_user_types x = (enum lreg_user_types)i;
         lreg_node_init(&ri->ri_rihs[i].rihs_lrn, x,
                        raft_server_instance_hist_lreg_cb,
                        (void *)&ri->ri_rihs[i],
