@@ -2624,13 +2624,15 @@ raft_server_issue_heartbeat(struct raft_instance *ri)
  * Write all the coalesced write entries.
  */
 static void
-raft_server_write_coalesced_entries(struct raft_instance *ri)
+raft_server_write_coalesced_entries(struct raft_instance *ri,
+                                    const char *caller_fn)
 {
+    DBG_RAFT_INSTANCE(LL_DEBUG, ri, "%s: nent=%u tsz=%zu",
+                      caller_fn, ri->ri_coalesced_wr->rcwi_nentries,
+                      ri->ri_coalesced_wr->rcwi_total_size);
+
     if (!ri->ri_coalesced_wr->rcwi_nentries)
         return;
-
-    SIMPLE_LOG_MSG(LL_DEBUG, "Write coalesced entries: %u",
-                   ri->ri_coalesced_wr->rcwi_nentries);
 
     raft_server_leader_write_new_entry(
         ri, ri->ri_coalesced_wr->rcwi_buffer,
@@ -4114,7 +4116,8 @@ raft_server_leader_co_wr_timer_expired(struct raft_instance *ri)
     niova_mutex_lock(&ri->ri_write_mutex);
     if (ri->ri_coalesced_wr->rcwi_nentries && !FAULT_INJECT(coalesced_writes))
     {
-        raft_server_write_coalesced_entries(ri); // Issue the pending wr
+        // Issue the pending write
+        raft_server_write_coalesced_entries(ri, __func__);
     }
     niova_mutex_unlock(&ri->ri_write_mutex);
 }
@@ -4438,7 +4441,7 @@ raft_server_write_coalesce_entry(struct raft_instance *ri, void *data, size_t le
     if (!ri->ri_coalesced_writes ||
         ri->ri_coalesced_wr->rcwi_nentries == RAFT_ENTRY_NUM_ENTRIES ||
         ri->ri_coalesced_wr->rcwi_total_size == RAFT_ENTRY_MAX_DATA_SIZE(ri))
-        raft_server_write_coalesced_entries(ri);
+        raft_server_write_coalesced_entries(ri, __func__);
 }
 
 static int
@@ -4520,7 +4523,9 @@ raft_server_client_rncr_write_raft_entry(
      */
     if (( rcm->rcrm_data_size + rncr->rncr_app_data.rncr_app_data_size + ri->ri_coalesced_wr->rcwi_total_size) >
         RAFT_ENTRY_MAX_DATA_SIZE(ri))
-        raft_server_write_coalesced_entries(ri);
+    {
+        raft_server_write_coalesced_entries(ri, __func__);
+    }
 
     /* Store the request as an entry in the Raft log.  Do not reply to
      * the client until the write is committed and applied!
