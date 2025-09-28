@@ -5,3 +5,6 @@
 [submodule "modules/holon"]
 	path = modules/holon
 	url = https://github.com/00pauln00/holon.git
+[submodule "modules/niova-core"]
+	path = modules/niova-core
+	url = https://github.com/00pauln00/niova-core.git
