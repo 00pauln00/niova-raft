@@ -4950,7 +4950,7 @@ raft_server_set_last_applied(struct raft_instance *ri,
 }
 
 static bool
-raft_server_needs_apply(struct raft_instance *ri) {
+raft_server_needs_apply(const struct raft_instance *ri) {
     NIOVA_ASSERT(ri);
     NIOVA_ASSERT(ri->ri_last_applied.rla_idx <= ri->ri_commit_idx);
 
@@ -4959,7 +4959,7 @@ raft_server_needs_apply(struct raft_instance *ri) {
              ri->ri_last_applied.rla_sub_idx < ri->ri_last_applied.rla_sub_idx_max));
 }
 
-static void raft_server_next_apply_idx(struct raft_instance *ri, struct raft_last_applied *nai) {
+static void raft_server_next_apply_idx(const struct raft_instance *ri, struct raft_last_applied *nai) {
     NIOVA_ASSERT(ri && nai);
     NIOVA_ASSERT(ri->ri_last_applied.rla_sub_idx <= ri->ri_last_applied.rla_sub_idx_max);
 
