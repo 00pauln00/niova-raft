@@ -5000,13 +5000,14 @@ raft_server_get_raft_header_to_apply(struct raft_instance *ri,
                                "raft_server_entry_header_read_by_store(): %s",
                                strerror(-rc));
 
-    // Sanity checks incase of recovery after partial apply failure
-    // the maximum of sub idx should be equal to the number of entries - 1
+    /* Sanity checks in case of recovery after partial apply failure the maximum
+     * of sub idx should be equal to the number of entries - 1
+     */
     if (ri->ri_last_applied.rla_sub_idx != ri->ri_last_applied.rla_sub_idx_max)
         NIOVA_ASSERT(reh->reh_num_entries ==
                      ri->ri_last_applied.rla_sub_idx_max + 1);
 
-    //Update max entries and crc in the next apply idx
+    // Update max entries and crc in the next apply idx
     nai->rla_sub_idx_max = reh->reh_num_entries - 1;
     nai->rla_cumulative_crc = reh->reh_crc;
 }
@@ -5026,7 +5027,7 @@ raft_server_init_send_reply(struct raft_instance *ri,
     if (raft_instance_is_leader(ri) &&
         raft_net_client_request_handle_has_reply_info(&rncr) &&
         uuid_compare(rncr.rncr_client_uuid,
-                    ri->ri_csn_this_peer->csn_uuid))
+                     ri->ri_csn_this_peer->csn_uuid))
     {
         /* rncr and rcrm_data_size gets populated in ri_server_sm_request_cb().
          * raft_server_client_reply_init() memset's rncr_reply which will
@@ -5036,8 +5037,8 @@ raft_server_init_send_reply(struct raft_instance *ri,
         struct raft_client_rpc_msg *reply = rncr.rncr_reply.rncr_reply_ptr;
         uint32_t orig_rcrm_data_size = reply->rcrm_data_size;
 
-        raft_server_client_reply_init(
-            ri, &rncr, RAFT_CLIENT_RPC_MSG_TYPE_REPLY);
+        raft_server_client_reply_init(ri, &rncr,
+                                      RAFT_CLIENT_RPC_MSG_TYPE_REPLY);
 
         reply->rcrm_data_size = orig_rcrm_data_size;
 
@@ -5067,11 +5068,14 @@ raft_server_state_machine_apply(struct raft_instance *ri)
      * persisting the last applied index will be done later along with apply
      * from the application.
      */
-    if (reh.reh_leader_change_marker || !reh.reh_data_size) {
+    if (reh.reh_leader_change_marker || !reh.reh_data_size)
+    {
         raft_server_set_last_applied(ri, &nai);
         raft_server_sm_apply_opt(ri, NULL);
+
         if (raft_server_needs_apply(ri))
             RAFT_NET_EVP_NOTIFY_NO_FAIL(ri, RAFT_EVP_SM_APPLY);
+
         return;
     }
 
@@ -5119,8 +5123,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
         if (rc)
             failed = true;
 
-        // Increment the sub applied idx and store it in the
-        // persistent store.
+        // Increment the sub applied idx and persist it
         raft_server_set_last_applied(ri, &nai);
         raft_server_sm_apply_opt(ri, &rncr.rncr_sm_write_supp);
         raft_net_sm_write_supplement_destroy(&rncr.rncr_sm_write_supp);
