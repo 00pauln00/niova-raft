@@ -506,6 +506,16 @@ struct raft_rw_worker_thread
     struct raft_work_queue *rrwt_queue;
 };
 
+// Struct to book keep last applied index and sub-indexes
+struct raft_last_applied
+{
+    raft_entry_idx_t        rla_idx;
+    uint32_t                rla_sub_idx;
+    uint32_t                rla_sub_idx_max;
+    raft_entry_idx_t        rla_synced_idx;
+    crc32_t                 rla_cumulative_crc;
+};
+
 struct raft_instance
 {
     struct udp_socket_handle        ri_ush[RAFT_UDP_LISTEN_MAX];
@@ -541,10 +551,8 @@ struct raft_instance
     int                             ri_timer_fd;
     char                            ri_log[PATH_MAX + 1];
     struct raft_log_header          ri_log_hdr;
-    int64_t                         ri_commit_idx;
-    int64_t                         ri_last_applied_idx;
-    int64_t                         ri_last_applied_synced_idx;
-    crc32_t                         ri_last_applied_cumulative_crc;
+    raft_entry_idx_t                ri_commit_idx;
+    struct raft_last_applied        ri_last_applied;
     raft_chkpt_thread_atomic64_t    ri_checkpoint_last_idx;
     raft_chkpt_thread_atomic64_t    ri_lowest_idx; // set by log reap
     pthread_mutex_t                 ri_compaction_mutex;
@@ -700,8 +708,8 @@ do {                                                          \
     }                                                         \
 } while (0)
 
-#define _DBG_RAFT_INSTANCE(log_level, tag, ri, fmt, ...)           \
-do {                                                               \
+#define _DBG_RAFT_INSTANCE(log_level, tag, ri, fmt, ...)               \
+do {                                                                   \
     DEBUG_BLOCK(log_level) {                                           \
         char __uuid_str[UUID_STR_LEN];                                 \
         uuid_unparse((ri)->ri_log_hdr.rlh_voted_for, __uuid_str);      \
@@ -721,8 +729,8 @@ do {                                                               \
                     raft_server_get_current_raft_entry_index(ri, RI_NEHDR_UNSYNC), \
                     (ri)->ri_log_hdr.rlh_term,                          \
                     (ri)->ri_log_hdr.rlh_seqno,                         \
-                    (ri)->ri_commit_idx, (ri)->ri_last_applied_idx,     \
-                    (ri)->ri_last_applied_synced_idx,                   \
+                    (ri)->ri_commit_idx, (ri)->ri_last_applied.rla_idx, \
+                    (ri)->ri_last_applied.rla_synced_idx,               \
                     niova_atomic_read(&(ri)->ri_checkpoint_last_idx),   \
                     __uuid_str, __leader_uuid_str,                      \
                     ##__VA_ARGS__);                                     \
@@ -1171,8 +1179,7 @@ raft_server_instance_run(const char *raft_uuid_str,
 
 void
 raft_server_backend_setup_last_applied(struct raft_instance *ri,
-                                       raft_entry_idx_t last_applied_idx,
-                                       crc32_t last_applied_cumulative_crc);
+                                       struct raft_last_applied *rla);
 
 int
 raft_server_init_recovery_handle_from_marker(struct raft_instance *ri,
@@ -1191,6 +1198,6 @@ raft_server_instance_chkpt_compact_max_idx(const struct raft_instance *ri)
 {
     NIOVA_ASSERT(ri);
 
-    return ri->ri_last_applied_synced_idx;
+    return ri->ri_last_applied.rla_synced_idx;
 }
 #endif
