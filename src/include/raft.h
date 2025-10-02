@@ -708,8 +708,8 @@ do {                                                          \
     }                                                         \
 } while (0)
 
-#define _DBG_RAFT_INSTANCE(log_level, tag, ri, fmt, ...)           \
-do {                                                               \
+#define _DBG_RAFT_INSTANCE(log_level, tag, ri, fmt, ...)               \
+do {                                                                   \
     DEBUG_BLOCK(log_level) {                                           \
         char __uuid_str[UUID_STR_LEN];                                 \
         uuid_unparse((ri)->ri_log_hdr.rlh_voted_for, __uuid_str);      \
@@ -729,8 +729,8 @@ do {                                                               \
                     raft_server_get_current_raft_entry_index(ri, RI_NEHDR_UNSYNC), \
                     (ri)->ri_log_hdr.rlh_term,                          \
                     (ri)->ri_log_hdr.rlh_seqno,                         \
-                    (ri)->ri_commit_idx, (ri)->ri_last_applied.rla_idx,     \
-                    (ri)->ri_last_applied.rla_synced_idx,                   \
+                    (ri)->ri_commit_idx, (ri)->ri_last_applied.rla_idx, \
+                    (ri)->ri_last_applied.rla_synced_idx,               \
                     niova_atomic_read(&(ri)->ri_checkpoint_last_idx),   \
                     __uuid_str, __leader_uuid_str,                      \
                     ##__VA_ARGS__);                                     \
