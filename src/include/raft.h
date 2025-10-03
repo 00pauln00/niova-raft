@@ -641,7 +641,7 @@ do {                                                                \
         case RAFT_RPC_MSG_TYPE_PRE_VOTE_REPLY:                          \
             LOG_MSG(log_level,                                          \
                     "%sVREPLY term=%ld granted=%s %s "fmt,              \
-                    (rm)->rrm_type == RAFT_RPC_MSG_TYPE_PRE_VOTE_REQUEST ? "PRE-" :	"", \
+                    (rm)->rrm_type == RAFT_RPC_MSG_TYPE_PRE_VOTE_REPLY ? "PRE-" : "", \
                     (rm)->rrm_vote_reply.rvrpm_term,                    \
                     ((rm)->rrm_vote_reply.rvrpm_voted_granted ?         \
                      "yes" : "no"),                                     \
