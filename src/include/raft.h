@@ -594,8 +594,8 @@ struct raft_instance
     struct raft_work_queue          ri_worker_queue[RAFT_SERVER_BULK_MSG_MAX];
     struct raft_recovery_handle     ri_recovery_handle;
     struct buffer_set               ri_buf_set[RAFT_BUF_SET_MAX];
-    struct raft_instance_co_wr     *ri_coalesced_wr; //must be the last member
     pthread_mutex_t                 ri_write_mutex;
+    struct raft_instance_co_wr     *ri_coalesced_wr; //must be the last member
 };
 
 static inline struct raft_recovery_handle *
