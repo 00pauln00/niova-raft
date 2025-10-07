@@ -5009,7 +5009,7 @@ raft_server_get_raft_header_to_apply(struct raft_instance *ri,
 
     // Update max entries and crc in the next apply idx
     nai->rla_sub_idx_max = reh->reh_num_entries - 1;
-    nai->rla_cumulative_crc = reh->reh_crc;
+    nai->rla_cumulative_crc = ri->ri_last_applied.rla_cumulative_crc ^ reh->reh_crc;
 }
 
 static void
