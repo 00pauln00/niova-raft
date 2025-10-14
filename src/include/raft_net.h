@@ -289,6 +289,12 @@ raft_client_rpc_msg_size_is_valid(enum raft_instance_store_type store_type,
 
 #define RAFT_NET_WR_SUPP_MAX 1024 // arbitrary limit..
 
+
+enum raft_net_wr_supp_op_flag
+{
+    RAFT_NET_WR_SUPP_OP_FLAG_WRITE = 0,
+    RAFT_NET_WR_SUPP_OP_FLAG_DELETE,
+};
 /**
  * raft_net_sm_write_supplements - structure holding KV items which the state
  *    machine can provide to the underlying Raft API.  These extra items are
@@ -297,13 +303,14 @@ raft_client_rpc_msg_size_is_valid(enum raft_instance_store_type store_type,
  */
 struct raft_net_wr_supp
 {
-    size_t  rnws_nkv;
-    void   *rnws_handle; // rocksdb cfhandle
-    void  (*rnws_comp_cb)(void *);
-    char  **rnws_keys;
-    size_t *rnws_key_sizes;
-    char  **rnws_values;
-    size_t *rnws_value_sizes;
+    enum raft_net_wr_supp_op_flag   rnws_op_flag; //Contains if the operation is write/delete
+    size_t                          rnws_nkv;
+    void                            *rnws_handle; // rocksdb cfhandle
+    void                            (*rnws_comp_cb)(void *);
+    char                            **rnws_keys;
+    size_t                          *rnws_key_sizes;
+    char                            **rnws_values;
+    size_t                          *rnws_value_sizes;
 };
 
 struct raft_net_sm_write_supplements
@@ -691,6 +698,7 @@ raft_net_sm_write_supplement_destroy(
 
 int
 raft_net_sm_write_supplement_add(struct raft_net_sm_write_supplements *rnsws,
+                                 enum raft_net_wr_supp_op_flag op_flag,
                                  void *handle, void (*rnws_comp_cb)(void *),
                                  const char *key, const size_t key_size,
                                  const char *value, const size_t value_size);
