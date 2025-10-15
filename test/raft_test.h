@@ -77,8 +77,7 @@ struct raft_test_data_block
     uint16_t                rtdb_op;
     uint32_t                rtdb_num_values;
     bool                    rtdb_logical_cmd; // flag to indicate logical command
-    uint32_t                rtdb_random_count; // random count for logical command
-    uint32_t                rtdb_increment_value; // increment value for logical command
+    uint32_t                rtdb_random_seed; // random seed for logical command
     struct raft_test_values rtdb_values[];
 };
 
