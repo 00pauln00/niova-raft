@@ -287,7 +287,7 @@ raft_client_rpc_msg_size_is_valid(enum raft_instance_store_type store_type,
         raft_net_max_rpc_size(store_type) ? true : false;
 }
 
-#define RAFT_NET_WR_SUPP_MAX 1024 // arbitrary limit..
+#define RAFT_NET_WR_SUPP_MAX (1024*1024)+1024 // arbitrary limit..
 
 /**
  * raft_net_sm_write_supplements - structure holding KV items which the state
