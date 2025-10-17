@@ -483,6 +483,19 @@ rsbr_write_supplements_put(const struct raft_net_sm_write_supplements *ws,
 
         for (size_t j = 0; j < supp->rnws_nkv; j++)
         {
+            if (supp->rnws_op_flag == RAFT_NET_WR_SUPP_OP_FLAG_DELETE)
+            {
+                if (supp->rnws_handle)
+                    rocksdb_writebatch_delete_cf(
+                        wb, (rocksdb_column_family_handle_t *)supp->rnws_handle,
+                        (const char *)supp->rnws_keys[j],
+                        supp->rnws_key_sizes[j]);
+                else
+                    rocksdb_writebatch_delete(wb,
+                                              (const char *)supp->rnws_keys[j],
+                                              supp->rnws_key_sizes[j]);
+                continue;
+            }
             if (supp->rnws_handle)
                 rocksdb_writebatch_put_cf(
                     wb, (rocksdb_column_family_handle_t *)supp->rnws_handle,
