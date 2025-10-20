@@ -2291,24 +2291,16 @@ raft_net_write_supp_new(struct raft_net_sm_write_supplements *rnsws,
 static void
 raft_net_write_supp_destroy(struct raft_net_wr_supp *ws)
 {
-    if (!ws || !ws->rnws_nkv)
+    if (!ws)
         return;
 
-    for (size_t i = 0; i < ws->rnws_nkv; i++)
-    {
-        niova_free(ws->rnws_keys[i]);
-        niova_free(ws->rnws_values[i]);
-    }
-
-    ws->rnws_nkv = 0;
-
-    niova_free(ws->rnws_keys);
-    niova_free(ws->rnws_values);
-    niova_free(ws->rnws_key_sizes);
-    niova_free(ws->rnws_value_sizes);
+    niova_free(ws->rnws_key);
+    niova_free(ws->rnws_value);
 
     if (ws->rnws_comp_cb)
         ws->rnws_comp_cb(ws->rnws_handle);
+    
+    niova_free(ws);
 }
 
 static int
@@ -2320,52 +2312,27 @@ raft_net_write_supp_add(struct raft_net_wr_supp *ws,
     if (!ws || !key || !key_size)
         return -EINVAL;
 
-    else if (ws->rnws_nkv == RAFT_NET_WR_SUPP_MAX)
-        return -ENOSPC;
-
-    NIOVA_ASSERT(ws->rnws_nkv < RAFT_NET_WR_SUPP_MAX);
-
     NIOVA_ASSERT(op < RAFT_NET_WR_SUPP_OP__MAX);
     ws->rnws_op = op;
 
-    size_t n = ws->rnws_nkv;
-
-    int rc = niova_reallocarray(ws->rnws_keys, char *, n + 1UL);
-    if (rc)
-        return rc;
-
-    rc = niova_reallocarray(ws->rnws_key_sizes, size_t, n + 1UL);
-    if (rc)
-        return rc;
-
-    rc = niova_reallocarray(ws->rnws_values, char *, n + 1UL);
-    if (rc)
-        return rc;
-
-    rc = niova_reallocarray(ws->rnws_value_sizes, size_t, n + 1UL);
-    if (rc)
-        return rc;
-
-    ws->rnws_keys[n] = niova_malloc(key_size);
-    if (!ws->rnws_keys[n])
+    ws->rnws_key = niova_malloc(key_size);
+    if (!ws->rnws_key)
         return -ENOMEM;
 
-    ws->rnws_values[n] = niova_malloc(value_size);
-    if (!ws->rnws_values[n])
+    ws->rnws_value = niova_malloc(value_size);
+    if (!ws->rnws_value)
     {
-        niova_free(ws->rnws_keys[n]);
+        niova_free(ws->rnws_key);
         return -ENOMEM;
     }
 
-    memcpy(ws->rnws_keys[n], key, key_size);
-    memcpy(ws->rnws_values[n], value, value_size);
+    memcpy(ws->rnws_key, key, key_size);
+    memcpy(ws->rnws_value, value, value_size);
 
-    ws->rnws_key_sizes[n] = key_size;
-    ws->rnws_value_sizes[n] = value_size;
+    ws->rnws_key_size = key_size;
+    ws->rnws_value_size = value_size;
 
-    ws->rnws_nkv++;
-
-    LOG_MSG(LL_DEBUG, "ws=%p nkv=%zu key=%s", ws, ws->rnws_nkv, key);
+    LOG_MSG(LL_DEBUG, "ws=%p key=%s", ws, key);
 
     return 0;
 }
