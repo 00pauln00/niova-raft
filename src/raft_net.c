@@ -2312,9 +2312,10 @@ raft_net_write_supp_destroy(struct raft_net_wr_supp *ws)
 }
 
 static int
-raft_net_write_supp_add(struct raft_net_wr_supp *ws, const char *key,
-                        const size_t key_size, const char *value,
-                        const size_t value_size)
+raft_net_write_supp_add(struct raft_net_wr_supp *ws,
+                        enum raft_net_wr_supp_op op,
+                        const char *key, const size_t key_size, 
+                        const char *value, const size_t value_size)
 {
     if (!ws || !key || !key_size)
         return -EINVAL;
@@ -2323,6 +2324,9 @@ raft_net_write_supp_add(struct raft_net_wr_supp *ws, const char *key,
         return -ENOSPC;
 
     NIOVA_ASSERT(ws->rnws_nkv < RAFT_NET_WR_SUPP_MAX);
+
+    NIOVA_ASSERT(op < RAFT_NET_WR_SUPP_OP__MAX);
+    ws->rnws_op = op;
 
     size_t n = ws->rnws_nkv;
 
@@ -2443,6 +2447,7 @@ raft_net_client_user_id_parse(const char *in,
  */
 int
 raft_net_sm_write_supplement_add(struct raft_net_sm_write_supplements *rnsws,
+                                 enum raft_net_wr_supp_op op,
                                  void *handle, void (*rnws_comp_cb)(void *),
                                  const char *key, const size_t key_size,
                                  const char *value, const size_t value_size)
@@ -2466,7 +2471,7 @@ raft_net_sm_write_supplement_add(struct raft_net_sm_write_supplements *rnsws,
     if (rnws_comp_cb) // Apply the callback if it was specified
         ws->rnws_comp_cb = rnws_comp_cb;
 
-    return raft_net_write_supp_add(ws, key, key_size, value, value_size);
+    return raft_net_write_supp_add(ws, op, key, key_size, value, value_size);
 }
 
 static void
