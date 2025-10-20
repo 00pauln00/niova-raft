@@ -103,7 +103,7 @@ ws_test(void)
 
     int handle = 0;
 
-    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_FLAG_WRITE, 
+    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_WRITE, 
                                           (void *)&handle, ws_test_cb,
                                           "foo", 3, "bar", 3);
     NIOVA_ASSERT(rc == 0);
@@ -117,7 +117,7 @@ ws_test(void)
 
     for (int i = 0; i < RAFT_NET_WR_SUPP_MAX; i++)
     {
-        rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_FLAG_WRITE,
+        rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_WRITE,
                                               (void *)&handle, ws_test_cb,
                                               "foo", 3, "bar", 3);
         NIOVA_ASSERT(!rc);
@@ -127,14 +127,14 @@ ws_test(void)
              ws.rnsws_nitems);
     NIOVA_ASSERT(handle == 0);
 
-    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_FLAG_WRITE,
+    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_WRITE,
                                           (void *)&handle, ws_test_cb,
                                           "foo", 3, "bar", 3);
     NIOVA_ASSERT(rc == -ENOSPC);
 
     // Try a merge and assert that it does not fit
     struct raft_net_sm_write_supplements wsMerge = {0};
-    rc = raft_net_sm_write_supplement_add(&wsMerge, RAFT_NET_WR_SUPP_OP_FLAG_WRITE,
+    rc = raft_net_sm_write_supplement_add(&wsMerge, RAFT_NET_WR_SUPP_OP_WRITE,
                                           (void *)&handle, ws_test_cb,
                                           "foo", 3, "bar", 3);
     NIOVA_ASSERT(!rc);
@@ -146,7 +146,7 @@ ws_test(void)
     NIOVA_ASSERT(handle == RAFT_NET_WR_SUPP_MAX);
     handle = 0;
 
-    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_FLAG_WRITE,
+    rc = raft_net_sm_write_supplement_add(&ws, RAFT_NET_WR_SUPP_OP_WRITE,
                                           (void *)&handle, ws_test_cb,
                                           "foo", 3, "bar", 3);
     NIOVA_ASSERT(!rc);
