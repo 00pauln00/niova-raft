@@ -305,12 +305,12 @@ struct raft_net_wr_supp
 {
     enum raft_net_wr_supp_op_flag   rnws_op_flag; //Contains if the operation is write/delete
     size_t                          rnws_nkv;
-    void                            *rnws_handle; // rocksdb cfhandle
-    void                            (*rnws_comp_cb)(void *);
-    char                            **rnws_keys;
-    size_t                          *rnws_key_sizes;
-    char                            **rnws_values;
-    size_t                          *rnws_value_sizes;
+    void                           *rnws_handle; // rocksdb cfhandle
+    void                          (*rnws_comp_cb)(void *);
+    char                          **rnws_keys;
+    size_t                         *rnws_key_sizes;
+    char                          **rnws_values;
+    size_t                         *rnws_value_sizes;
 };
 
 struct raft_net_sm_write_supplements
