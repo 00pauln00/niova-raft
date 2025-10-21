@@ -297,7 +297,7 @@ enum raft_net_wr_supp_op
     RAFT_NET_WR_SUPP_OP__MAX,
 };
 /**
- * raft_net_sm_write_supplements - structure holding KV items which the state
+ * raft_net_sm_write_supplements - structure holding KV item which the state
  *    machine can provide to the underlying Raft API.  These extra items are
  *    then written transactionally alongside any raft write or apply operation.
  *    Note, this for use with flexible backend providers, such as RocksDB.
@@ -305,13 +305,12 @@ enum raft_net_wr_supp_op
 struct raft_net_wr_supp
 {
     enum raft_net_wr_supp_op   rnws_op; //Contains if the operation is write/delete
-    size_t                     rnws_nkv;
     void                      *rnws_handle; // rocksdb cfhandle
     void                     (*rnws_comp_cb)(void *);
-    char                     **rnws_keys;
-    size_t                    *rnws_key_sizes;
-    char                     **rnws_values;
-    size_t                    *rnws_value_sizes;
+    char                      *rnws_key;
+    size_t                     rnws_key_size;
+    char                      *rnws_value;
+    size_t                     rnws_value_size;
 };
 
 struct raft_net_sm_write_supplements
