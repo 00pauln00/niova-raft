@@ -484,30 +484,25 @@ rsbr_write_supplements_put(const struct raft_net_sm_write_supplements *ws,
         switch (supp->rnws_op) {
         case RAFT_NET_WR_SUPP_OP_DELETE:
             if (supp->rnws_handle)
-                rocksdb_writebatch_delete_cf(
-                    wb, (rocksdb_column_family_handle_t *)supp->rnws_handle,
-                    (const char *)supp->rnws_key,
-                    supp->rnws_key_size);
+                rocksdb_writebatch_delete_cf(wb, 
+                                             (rocksdb_column_family_handle_t *)supp->rnws_handle,
+                                             (const char *)supp->rnws_key,
+                                             supp->rnws_key_size);
             else
-                rocksdb_writebatch_delete(wb,
-                                            (const char *)supp->rnws_key,
-                                            supp->rnws_key_size);
+                rocksdb_writebatch_delete(wb, (const char *)supp->rnws_key, supp->rnws_key_size);
             break;
 
         case RAFT_NET_WR_SUPP_OP_WRITE:
             if (supp->rnws_handle)
-                rocksdb_writebatch_put_cf(
-                    wb, (rocksdb_column_family_handle_t *)supp->rnws_handle,
-                    (const char *)supp->rnws_key,
-                    supp->rnws_key_size,
-                    (const char *)supp->rnws_value,
-                    supp->rnws_value_size);
+                rocksdb_writebatch_put_cf(wb, 
+                                          (rocksdb_column_family_handle_t *)supp->rnws_handle,
+                                          (const char *)supp->rnws_key,
+                                          supp->rnws_key_size,
+                                          (const char *)supp->rnws_value,
+                                          supp->rnws_value_size);
             else
-                rocksdb_writebatch_put(wb,
-                                    (const char *)supp->rnws_key,
-                                    supp->rnws_key_size,
-                                    (const char *)supp->rnws_value,
-                                    supp->rnws_value_size);
+                rocksdb_writebatch_put(wb, (const char *)supp->rnws_key, supp->rnws_key_size,
+                                       (const char *)supp->rnws_value, supp->rnws_value_size);
             break;
         default:
             SIMPLE_LOG_MSG(LL_ERROR, "unknown rnws_op=%d", supp->rnws_op);
