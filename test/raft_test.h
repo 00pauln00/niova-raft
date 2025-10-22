@@ -76,6 +76,8 @@ struct raft_test_data_block
     uuid_t                  rtdb_client_uuid; // application uuid
     uint16_t                rtdb_op;
     uint32_t                rtdb_num_values;
+    bool                    rtdb_logical_cmd; // flag to indicate logical command
+    uint32_t                rtdb_random_seed; // random seed for logical command
     struct raft_test_values rtdb_values[];
 };
 
