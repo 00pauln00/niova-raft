@@ -2300,7 +2300,6 @@ raft_net_write_supp_destroy(struct raft_net_wr_supp *ws)
     if (ws->rnws_comp_cb)
         ws->rnws_comp_cb(ws->rnws_handle);
     
-    niova_free(ws);
 }
 
 static int
