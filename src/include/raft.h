@@ -115,13 +115,15 @@ enum raft_buf_set_type
 {
     RAFT_BUF_SET_SMALL  = 0,
     RAFT_BUF_SET_LARGE  = 1,
-    RAFT_BUF_SET_MAX    = 2,
+    RAFT_BUF_SET_APPLY  = 2,
+    RAFT_BUF_SET_MAX    = 3,
 };
 
 enum raft_buf_set_size
 {
     RAFT_BS_SMALL_SZ = 4096,
     RAFT_BS_LARGE_SZ = 4194304,
+    RAFT_BS_APPLY_SZ = 4194304,
 };
 
 //Note: Dont use these NBUF macros directly as TCP_MGR_NTHREADS
@@ -130,6 +132,7 @@ enum raft_buf_set_nbuf
 {
     RAFT_BS_SMALL_NBUF = (RAFT_ENTRY_NUM_ENTRIES + TCP_MGR_NTHREADS),
     RAFT_BS_LARGE_NBUF = TCP_MGR_NTHREADS,
+    RAFT_BS_APPLY_NBUF = 2,
 };
 
 struct raft_vote_request_msg
