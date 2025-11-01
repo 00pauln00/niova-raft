@@ -1518,7 +1518,7 @@ rsbr_chkpt_scan_parse_entry(const struct dirent *dent, uuid_t db_uuid,
         return -ENOTDIR;
 
     char dname[CHKPT_FILENAME_LEN + 1] = {0};
-    strncpy(dname, dent->d_name, CHKPT_FILENAME_LEN);
+    memcpy(dname, dent->d_name, CHKPT_FILENAME_LEN);
     dname[CHKPT_FILENAME_LEN] = '\0';
     dname[UUID_STR_LEN - 1] = '\0';
     dname[(UUID_STR_LEN * 2) - 1] = '\0';
