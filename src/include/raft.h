@@ -132,7 +132,8 @@ enum raft_buf_set_nbuf
 {
     RAFT_BS_SMALL_NBUF = (RAFT_ENTRY_NUM_ENTRIES + TCP_MGR_NTHREADS),
     RAFT_BS_LARGE_NBUF = TCP_MGR_NTHREADS,
-    RAFT_BS_APPLY_NBUF = 2,
+    RAFT_BS_APPLY_NBUF = 2 //These two are used by sink and reply within 
+                           //.. raft_server_state_machine_apply
 };
 
 struct raft_vote_request_msg
