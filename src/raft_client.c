@@ -1754,12 +1754,28 @@ raft_client_reply_try_complete(struct raft_client_instance *rci,
     raft_client_sub_app_put(rci, sa, __func__, __LINE__);
 }
 
+/*
+raft_client_error_handler processes errors received from the 
+Raft server. If the error needs to be propagated to the Pumice layer, 
+it should be stored in rcrm_app_error. The function should return 
+true if the request processing should continue.
+*/
+bool raft_client_error_handler(struct raft_client_rpc_msg *rcrm) {
+    switch (rcrm->rcrm_sys_error) {
+        default:
+            rcrm->rcrm_app_error = rcrm->rcrm_sys_error;
+            return true;
+    }
+
+    return true;
+}
+
 /**
  * raft_client_recv_handler_process_reply - handler for non-ping replies.
  */
 static raft_net_cb_ctx_t
 raft_client_recv_handler_process_reply(
-    struct raft_client_instance *rci, const struct raft_client_rpc_msg *rcrm,
+    struct raft_client_instance *rci, struct raft_client_rpc_msg *rcrm,
     const struct ctl_svc_node *sender_csn, const struct sockaddr_in *from)
 {
     NIOVA_ASSERT(rci && RCI_2_RI(rci) && rcrm && sender_csn && from);
@@ -1777,9 +1793,12 @@ raft_client_recv_handler_process_reply(
     else if (rcrm->rcrm_sys_error)
     {
         DBG_RAFT_CLIENT_RPC_SOCK(LL_NOTIFY, rcrm, from, "sys-err=%s",
-                                 strerror(-rcrm->rcrm_sys_error));
-        return;
+                                strerror(-rcrm->rcrm_sys_error));
+        bool cpflag = raft_client_error_handler(rcrm);
+        if (!cpflag)
+            return;
     }
+
     niova_realtime_coarse_clock(&rci->rci_last_request_ackd);
 
     raft_client_reply_try_complete(rci, rcrm, from);
@@ -1813,8 +1832,8 @@ raft_client_recv_handler(struct raft_instance *ri, const char *recv_buffer,
     struct raft_client_instance *rci =
         raft_client_raft_instance_to_client_instance(ri);
 
-    const struct raft_client_rpc_msg *rcrm =
-        (const struct raft_client_rpc_msg *)recv_buffer;
+    struct raft_client_rpc_msg *rcrm =
+        (struct raft_client_rpc_msg *)recv_buffer;
 
     struct ctl_svc_node *sender_csn = raft_net_verify_sender_server_msg(
         ri, rcrm->rcrm_sender_id, rcrm->rcrm_raft_id, from);
