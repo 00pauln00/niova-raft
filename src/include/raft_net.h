@@ -287,7 +287,17 @@ raft_client_rpc_msg_size_is_valid(enum raft_instance_store_type store_type,
         raft_net_max_rpc_size(store_type) ? true : false;
 }
 
+#ifdef UNIT_TEST
+/* FIXME: Reduced limit for unit tests due to ASAN performance issues.
+ * With ASAN enabled, tests with RAFT_NET_WR_SUPP_MAX = (1024*1024)+1024 take
+ * extremely long to complete (hours) due to excessive munmap/mmap calls in
+ * ASAN. See: https://github.com/00pauln00/niova-raft/issues/20
+ * TODO: Investigate and understand why ASAN takes so long to run.
+ */
+#define RAFT_NET_WR_SUPP_MAX 1024
+#else
 #define RAFT_NET_WR_SUPP_MAX (1024*1024)+1024 // arbitrary limit..
+#endif
 
 
 enum raft_net_wr_supp_op

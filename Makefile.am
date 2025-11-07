@@ -70,7 +70,7 @@ noinst_PROGRAMS += test/raft-net-test
 test_raft_net_test_SOURCES =   \
 	$(RAFT_NET_CORE_SOURCES) test/raft-net-test.c
 test_raft_net_test_LDADD = $(NIOVA_LIBS) $(NIOVA_BT_LIB)
-test_raft_net_test_CFLAGS = $(AM_CFLAGS)
+test_raft_net_test_CFLAGS = $(AM_CFLAGS) -DUNIT_TEST
 TESTS += test/raft-net-test
 
 autofmt:
