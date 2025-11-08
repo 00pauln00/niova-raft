@@ -1092,13 +1092,17 @@ rsbr_num_entries_calc(struct raft_instance *ri)
     const char *iter_key = rocksdb_iter_key(iter, &iter_key_len);
 
     if (iter_key_len <= RAFT_ENTRY_KEY_PREFIX_ROCKSDB_STRLEN)
+    {
+        rocksdb_iter_destroy(iter);
         return (ssize_t)-EBADMSG;
+    }
 
     ssize_t last_entry_idx =
         strtoull(&iter_key[RAFT_ENTRY_KEY_PREFIX_ROCKSDB_STRLEN], NULL, 10);
 
     SIMPLE_LOG_MSG(LL_NOTIFY, "last-entry-index=%zd", last_entry_idx + 1);
 
+    rocksdb_iter_destroy(iter);
     return last_entry_idx >= 0L ? last_entry_idx + 1 : last_entry_idx;
 }
 
@@ -1643,51 +1647,63 @@ static int
 rsbr_bulk_recover_build_remote_path(const struct raft_recovery_handle *rrh,
                                     char *remote_path, size_t len)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_build_remote_path() entry");
     if (!rrh)
         return -EINVAL;
 
     DECLARE_AND_INIT_UUID_STR(peer_uuid_str, rrh->rrh_peer_uuid);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Looking up peer: %s", peer_uuid_str);
 
     // Lookup the csn
     struct ctl_svc_node *csn;
     int rc = ctl_svc_node_lookup(rrh->rrh_peer_uuid, &csn);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: ctl_svc_node_lookup() failed: %s", strerror(-rc));
         LOG_MSG(LL_ERROR, "ctl_svc_node_lookup(%s): %s", peer_uuid_str,
                 strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Peer lookup successful");
 
     // Find the remote store db path
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Getting remote store");
     const char *remote_store = ctl_svc_node_peer_2_store(csn);
     if (!remote_store)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remote store is NULL");
         LOG_MSG(LL_ERROR, "ctl_svc_node_peer_2_store(%s): NULL",
                 peer_uuid_str);
         rc = -ENOENT;
         goto out;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remote store: %s", remote_store);
 
     char remote_relative_path[PATH_MAX];
     /* Use the path building method.  Note that 'local' is set to true since
      * the path is "local" relative to the remote peer.  In other words, we're
      * building the path to be used on the remote end.
      */
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building checkpoint path");
     rc = rsbr_checkpoint_path_build(remote_store, rrh->rrh_peer_uuid,
                                     rrh->rrh_peer_db_uuid,
                                     rrh->rrh_peer_chkpt_idx, true, false,
                                     remote_relative_path, PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_checkpoint_path_build() failed: %s", strerror(-rc));
         LOG_MSG(LL_ERROR, "rsbr_checkpoint_path_build(%s): %s",
                 peer_uuid_str, strerror(-rc));
         goto out;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Checkpoint path: %s", remote_relative_path);
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building full remote path");
     rc = snprintf(remote_path, len - 1, "%s:%s",
                   ctl_svc_node_peer_2_ipaddr(csn), remote_relative_path);
     if (rc >= (ssize_t)len)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Path too long");
         LOG_MSG(LL_ERROR, "snprintf() overrun (rc=%d)", rc);
         rc = -ENAMETOOLONG;
         goto out;
@@ -1696,8 +1712,10 @@ rsbr_bulk_recover_build_remote_path(const struct raft_recovery_handle *rrh,
     {
         rc = 0;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Full remote path: %s", remote_path);
 out:
     ctl_svc_node_put(csn); // Must 'put' the csn to avoid leaks
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_build_remote_path() exit with rc=%d", rc);
     return rc;
 }
 
@@ -1917,27 +1935,36 @@ static int
 rsbr_bulk_recover_xfer(struct raft_recovery_handle *rrh,
                        const char *remote_path, const char *local_path)
 {
-    return RSBR_BULK_RECOVER_RSYNC_CMD(rsbr_bulk_recover_xfer_rsync, rrh,
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_xfer() entry");
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: remote_path=%s, local_path=%s",
+                   remote_path, local_path);
+    int rc = RSBR_BULK_RECOVER_RSYNC_CMD(rsbr_bulk_recover_xfer_rsync, rrh,
                                        remote_path, local_path);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_xfer() exit with rc=%d", rc);
+    return rc;
 }
 
 static ssize_t
 rsbr_bulk_recover_get_fs_free_space(struct raft_instance *ri)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_get_fs_free_space() entry");
     NIOVA_ASSERT(ri && ri->ri_log != NULL);
 
     struct statvfs stv;
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calling statvfs() on %s", ri->ri_log);
     int rc = statvfs(ri->ri_log, &stv);
     if (rc)
     {
         rc = -errno;
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: statvfs() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "statvfs(): %s", strerror(-rc));
         return rc;
     }
     else if (stv.f_flag & ST_RDONLY)
     {
         rc = -EPERM;
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Filesystem is read-only");
         SIMPLE_LOG_MSG(LL_ERROR, "%s is a read-only-fs", ri->ri_log);
         return rc;
     }
@@ -1946,6 +1973,7 @@ rsbr_bulk_recover_get_fs_free_space(struct raft_instance *ri)
 
     SIMPLE_LOG_MSG(LL_WARN, "%s available-capacity=%zd",
                    ri->ri_log, available_cap);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_get_fs_free_space() exit with capacity=%zd", available_cap);
 
     return available_cap;
 }
@@ -1956,30 +1984,41 @@ rsbr_bulk_recover_calculate_remaining(struct raft_recovery_handle *rrh,
                                       const char *local_path,
                                       const ssize_t available_cap)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_calculate_remaining() entry");
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: remote_path=%s, local_path=%s, available_cap=%zd",
+                   remote_path, local_path, available_cap);
     int rc = RSBR_BULK_RECOVER_RSYNC_CMD(
         rsbr_bulk_recover_calculate_remaining_rsync, rrh, remote_path,
         local_path);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: RSYNC_CMD returned: %s", strerror(-rc));
 
     if (!rc)
     {
         if (rrh->rrh_remaining < 0 || rrh->rrh_chkpt_size < 0)
         {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Unable to determine size requirements");
             SIMPLE_LOG_MSG(LL_ERROR, "Unable to determine size requirements.");
             return -ENODATA;
         }
         else if (rrh->rrh_remaining > available_cap)
         {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Insufficient space: remaining=%zd > available=%zd",
+                           rrh->rrh_remaining, available_cap);
             SIMPLE_LOG_MSG(LL_ERROR, "Remaining=%zd > available-capacity=%zd",
                            rrh->rrh_remaining, available_cap);
             return -ENOSPC;
         }
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Size check passed: remaining=%zd, chkpt_size=%zd",
+                       rrh->rrh_remaining, rrh->rrh_chkpt_size);
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover_calculate_remaining() exit with rc=%d", rc);
     return rc;
 }
 
 static int
 rsbr_bulk_recovery_remove_current_db_contents(struct raft_instance *ri)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_remove_current_db_contents() entry");
     NIOVA_ASSERT(ri);
 
     // Check the status of the last checkpoint, if 'ok', remove db/ contents
@@ -1993,18 +2032,30 @@ rsbr_bulk_recovery_remove_current_db_contents(struct raft_instance *ri)
     }
 
     // Move the contents to the trash and empty
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Moving DB contents to trash");
     int rc = rsbr_move_item_to_trash(ri, ribSubDirs[RIR_SUBDIR_DB]);
     if (rc && rc != -ENOENT)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Move to trash failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_move_item_to_trash(`%s'): %s",
                        ribSubDirs[RIR_SUBDIR_DB], strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Move to trash completed");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Removing trash");
     rc = rsbr_remove_trash(ri);
     if (rc)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remove trash failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_remove_trash(): %s", strerror(-rc));
+    }
+    else
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remove trash completed");
+    }
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_remove_current_db_contents() exit with rc=%d", rc);
     return rc;
 }
 
@@ -2012,59 +2063,85 @@ static int
 rsbr_bulk_recovery_import_remote_db(struct raft_instance *ri,
                                     struct raft_recovery_handle *rrh)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_import_remote_db() entry");
     if (!ri || !rrh || ri->ri_incomplete_recovery ||
         rrh->rrh_from_recovery_marker || rrh->rrh_peer_chkpt_idx < 0 ||
         !uuid_compare(rrh->rrh_peer_uuid, ri->ri_csn_this_peer->csn_uuid))
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Invalid parameters for import");
         return -EINVAL;
+    }
 
     // Obtain the available size on the DB fs
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Getting filesystem free space");
     const ssize_t available_cap = rsbr_bulk_recover_get_fs_free_space(ri);
     if (available_cap < 0)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to get free space: %s", strerror(-(int)available_cap));
         return (int)available_cap;
+    }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Available capacity: %zd", available_cap);
 
     char remote_path[PATH_MAX] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building remote path");
     int rc = rsbr_bulk_recover_build_remote_path(rrh, remote_path, PATH_MAX);
     if (rc)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build remote path: %s", strerror(-rc));
         return rc;
+    }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remote path built: %s", remote_path);
 
     char local_path[PATH_MAX] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building local rsync path");
     rc = rsbr_recovery_rsync_path_build(ri->ri_log, rrh->rrh_peer_uuid,
                                  rrh->rrh_peer_db_uuid, local_path, PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build local path: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_recovery_rsync_path_build(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Local path built: %s", local_path);
 
     SIMPLE_LOG_MSG(LL_DEBUG, "rem=%s local=%s", remote_path, local_path);
 
     // Perform a dry-run rsync to determine the amount of data to be xfer'd
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calculating remaining data (pre-transfer)");
     rc = rsbr_bulk_recover_calculate_remaining(rrh, remote_path, local_path,
                                                available_cap);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calculate remaining (pre) failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR,
                        "rsbr_bulk_recover_calculate_remaining(pre): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remaining data (pre): %zd, checkpoint size: %zd",
+                   rrh->rrh_remaining, rrh->rrh_chkpt_size);
 
     // Execute the actual rsync
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Starting rsync transfer");
     rc = rsbr_bulk_recover_xfer(rrh, remote_path, local_path);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsync transfer failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_bulk_recover_xfer(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsync transfer completed successfully");
 
     // Run another dry-run to ensure that everything is in place.
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calculating remaining data (post-transfer)");
     rrh->rrh_remaining = -1;
     rc = rsbr_bulk_recover_calculate_remaining(rrh, remote_path, local_path,
                                                available_cap);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calculate remaining (post) failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR,
                        "rsbr_bulk_recover_calculate_remaining(post): %s",
                        strerror(-rc));
@@ -2072,13 +2149,16 @@ rsbr_bulk_recovery_import_remote_db(struct raft_instance *ri,
     }
     else if (rrh->rrh_remaining != 0) // Should prove the xfer is complete
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Transfer incomplete, remaining=%zd", rrh->rrh_remaining);
         SIMPLE_LOG_MSG(LL_ERROR,
                        "rrh_remaining(%zd) != 0 after rsbr_bulk_recover_calculate_remaining(post)",
                        rrh->rrh_remaining);
 
         return -EBADE;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Transfer verified complete (remaining=0)");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_import_remote_db() exit successfully");
     return 0;
 }
 
@@ -2131,6 +2211,7 @@ static int
 rsbr_bulk_recovery_db_scrub(struct raft_instance *ri,
                             const struct raft_recovery_handle *rrh)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_db_scrub() entry");
     NIOVA_ASSERT(ri && rrh && raft_instance_is_recovering(ri));
 
     DECLARE_AND_INIT_UUID_STR(ri_db_uuid_str, ri->ri_db_uuid);
@@ -2142,6 +2223,7 @@ rsbr_bulk_recovery_db_scrub(struct raft_instance *ri,
     if (uuid_compare(ri->ri_db_uuid, rrh->rrh_peer_db_uuid) &&
         uuid_compare(ri->ri_db_recovery_uuid, rrh->rrh_peer_db_uuid))
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: DB UUID mismatch");
         SIMPLE_LOG_MSG(LL_ERROR,
                        "expected db-uuid=%s or recovery-uuid=%s found db=%s",
                        rrh_db_uuid_str, ri_db_recover_uuid_str,
@@ -2149,26 +2231,33 @@ rsbr_bulk_recovery_db_scrub(struct raft_instance *ri,
 
         return -ENODEV;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: DB UUID validation passed");
 
     // Stash our uuid string temporarily for a call to rsbr_header_load()
     const char *tmp_this_peer_uuid_str = ri->ri_this_peer_uuid_str;
     ri->ri_this_peer_uuid_str = rrh_peer_uuid_str;
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Loading header");
     int rc = rsbr_header_load(ri);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_header_load() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_header_load(): %s", strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Header loaded successfully");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Scrubbing entry headers");
     rc = rsbr_bulk_recovery_db_scrub_entry_headers(ri, rrh);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_db_scrub_entry_headers() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR,
                        "rsbr_bulk_recovery_db_scrub_entry_headers(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Entry headers scrubbed successfully");
 
     /* Restore the original uuid string and re-init the header.  Note that
      * rsbr_init_header() will not clear the current log header contents
@@ -2177,13 +2266,17 @@ rsbr_bulk_recovery_db_scrub(struct raft_instance *ri,
      * entry headers have been replaced.
      */
     ri->ri_this_peer_uuid_str = tmp_this_peer_uuid_str;
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Initializing header");
     rc = rsbr_init_header(ri); // must be a synchronous write
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_init_header() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_init_header(): %s", strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Header initialized successfully");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_db_scrub() exit successfully");
     return 0;
 }
 
@@ -2191,38 +2284,49 @@ static int
 rsbr_bulk_recovery_stage_remote_db(struct raft_instance *ri,
                                    const struct raft_recovery_handle *rrh)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_stage_remote_db() entry");
     NIOVA_ASSERT(ri && rrh);
 
     char rsync_path[PATH_MAX + 1] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building rsync path for staging");
     int rc = rsbr_recovery_rsync_path_build(ri->ri_log, rrh->rrh_peer_uuid,
                                             rrh->rrh_peer_db_uuid, rsync_path,
                                             PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build rsync path: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_recovery_rsync_path_build(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rsync path: %s", rsync_path);
 
     char stage_path[PATH_MAX + 1] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building in-progress path");
     rc = rsbr_recovery_inprogress_path_build(ri->ri_log, rrh, stage_path,
                                              PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build in-progress path: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_recovery_inprogress_path_build(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: In-progress path: %s", stage_path);
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Renaming from rsync to in-progress");
     rc = rename(rsync_path, stage_path);
     if (rc)
     {
         rc = -errno;
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rename failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rename(`%s' -> `%s'): %s",
                        rsync_path, stage_path, strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rename completed successfully");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_stage_remote_db() exit successfully");
     return 0;
 }
 
@@ -2254,37 +2358,48 @@ static int
 rsbr_bulk_recovery_promote_scrubbed_db(struct raft_instance *ri,
                                        const struct raft_recovery_handle *rrh)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_promote_scrubbed_db() entry");
     char stage_path[PATH_MAX + 1] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building in-progress path for promotion");
     int rc = rsbr_recovery_inprogress_path_build(ri->ri_log, rrh, stage_path,
                                                  PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build in-progress path: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_recovery_inprogress_path_build(): %s",
                        strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Stage path: %s", stage_path);
 
     // rsbr_make_db_pathname() determines pathname based on proc-state
     if (!raft_instance_is_shutdown(ri))
         ri->ri_proc_state = RAFT_PROC_STATE_SHUTDOWN;
 
     char db_path[PATH_MAX + 1] = {0};
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Building DB pathname");
     rc = rsbr_make_db_pathname(ri, db_path, PATH_MAX);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to build DB pathname: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_make_db_pathname(): %s", strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: DB path: %s", db_path);
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Renaming from in-progress to DB");
     rc = rename(stage_path, db_path);
     if (rc)
     {
         rc = -errno;
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rename failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rename(`%s' -> `%s'): %s",
                        stage_path, db_path, strerror(-rc));
         return rc;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rename completed successfully");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_promote_scrubbed_db() exit successfully");
     return 0;
 
 }
@@ -2292,6 +2407,7 @@ rsbr_bulk_recovery_promote_scrubbed_db(struct raft_instance *ri,
 static int
 rsbr_destroy(struct raft_instance *ri)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_destroy() entry");
     if (!ri)
         return -EINVAL;
 
@@ -2300,29 +2416,141 @@ rsbr_destroy(struct raft_instance *ri)
 
     struct raft_instance_rocks_db *rir = rsbr_ri_to_rirdb(ri);
 
-    if (rir->rir_log_fd < 0)
+    // Close log_fd if it's open (note: this might be registered with epoll,
+    // but epoll cleanup should handle EBADF gracefully)
+    if (rir->rir_log_fd >= 0)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Closing log_fd=%d", rir->rir_log_fd);
         int rc = close(rir->rir_log_fd);
         if (rc)
             SIMPLE_LOG_MSG(LL_WARN, "close(rir_log_fd): %s",
                            strerror(-errno));
-        else
-            rir->rir_log_fd = -1;
+        rir->rir_log_fd = -1;
     }
 
     if (rir->rir_db)
     {
-        rocksdb_close(rir->rir_db);
-
-        // User must call raft_server_rocksdb_release_cf_table()
-        if (rir->rir_cf_table) // Handles seem to be freed in rocksdb_close()
+        // CRITICAL: Column family handles MUST be destroyed BEFORE closing the DB.
+        // RocksDB's ColumnFamilySet destructor asserts that all handles are
+        // destroyed (last_ref == true) before the DB is closed.
+        if (rir->rir_cf_table)
         {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying column family handles before closing DB");
             struct raft_server_rocksdb_cf_table *cft = rir->rir_cf_table;
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: CF table has %zu column families", cft->rsrcfe_num_cf);
 
-            for (size_t i = 0; i < cft->rsrcfe_num_cf; i++)
+            // CRITICAL: Destroy non-default CF handles first, then default CF handle last.
+            // RocksDB requires the default column family handle to be destroyed last.
+            // The default CF is typically at index 0.
+            
+            // First pass: Destroy all non-default CF handles (indices 1, 2, ...)
+            for (size_t i = 1; i < cft->rsrcfe_num_cf; i++)
+            {
                 if (cft->rsrcfe_cf_handles[i])
+                {
+                    const char *cf_name = cft->rsrcfe_cf_names[i] ? cft->rsrcfe_cf_names[i] : "NULL";
+                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying non-default CF handle[%zu] for '%s' (handle=%p)", 
+                                   i, cf_name, (void *)cft->rsrcfe_cf_handles[i]);
+                    rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[i]);
                     cft->rsrcfe_cf_handles[i] = NULL;
+                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Non-default CF handle[%zu] destroyed successfully", i);
+                }
+                else
+                {
+                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Non-default CF handle[%zu] is already NULL", i);
+                }
+            }
+            
+            // Second pass: Destroy the default CF handle last (index 0)
+            if (cft->rsrcfe_num_cf > 0 && cft->rsrcfe_cf_handles[0])
+            {
+                const char *cf_name = cft->rsrcfe_cf_names[0] ? cft->rsrcfe_cf_names[0] : "NULL";
+                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying default CF handle[0] for '%s' (handle=%p) LAST", 
+                               cf_name, (void *)cft->rsrcfe_cf_handles[0]);
+                rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[0]);
+                cft->rsrcfe_cf_handles[0] = NULL;
+                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Default CF handle[0] destroyed successfully (last)");
+            }
+            else if (cft->rsrcfe_num_cf > 0)
+            {
+                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Default CF handle[0] is already NULL");
+            }
+            
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: All CF handles destroyed (default destroyed last), num_cf=%zu", cft->rsrcfe_num_cf);
         }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: No CF table to destroy");
+        }
+
+        // Before closing RocksDB, perform comprehensive cleanup to ensure
+        // all references are released before ColumnFamilySet destructor runs.
+        //
+        // ISOLATION TESTING: To test which fix is critical, comment out sections below:
+        // - TEST: Comment out WAL flush (lines 2489-2502) - likely not needed for refs
+        // - TEST: Comment out file deletion disable/enable (lines 2504-2517, 2524-2536) - likely not needed
+        // - TEST: Comment out cancel background work (lines 2519-2522) - LIKELY THE KEY FIX
+        //
+        // HYPOTHESIS: rocksdb_cancel_all_background_work() is critical because:
+        //   - Background threads hold SuperVersion references
+        //   - SuperVersions hold ColumnFamilyData references
+        //   - If background work is still running when DB closes, refs remain → assertion fails
+        
+        // ===== FIX 1: Flush WAL (for data integrity, likely not needed for ref counting) =====
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Flushing WAL before close");
+        char *flush_err = NULL;
+        rocksdb_flush_wal(rir->rir_db, 1, &flush_err); // sync=true
+        if (flush_err)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_flush_wal() returned error: %s (continuing anyway)", flush_err);
+            free(flush_err);
+            flush_err = NULL;
+        }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: WAL flushed successfully");
+        }
+        
+        // ===== FIX 2: Disable file deletions (prevents new background ops, likely not critical) =====
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Disabling file deletions");
+        char *disable_err = NULL;
+        rocksdb_disable_file_deletions(rir->rir_db, &disable_err);
+        if (disable_err)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_disable_file_deletions() returned error: %s (continuing anyway)", disable_err);
+            free(disable_err);
+            disable_err = NULL;
+        }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: File deletions disabled successfully");
+        }
+        
+        // ===== FIX 3: Cancel all background work ⭐ LIKELY THE CRITICAL FIX =====
+        // This ensures all background threads (compaction/flush) complete and release
+        // their SuperVersion references BEFORE the DB is closed.
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Canceling all background work before close");
+        rocksdb_cancel_all_background_work(rir->rir_db, 1); // wait=true to ensure completion
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Background work canceled");
+        
+        // ===== FIX 4: Re-enable file deletions (cleanup, likely not critical) =====
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Re-enabling file deletions");
+        char *enable_err = NULL;
+        rocksdb_enable_file_deletions(rir->rir_db, 0, &enable_err); // force=0 (false)
+        if (enable_err)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_enable_file_deletions() returned error: %s (continuing anyway)", enable_err);
+            free(enable_err);
+        }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: File deletions re-enabled successfully");
+        }
+
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Closing RocksDB (db=%p)", (void *)rir->rir_db);
+        rocksdb_close(rir->rir_db);
+        rir->rir_db = NULL;
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: RocksDB closed");
     }
 
     if (rir->rir_writeoptions_sync)
@@ -2540,17 +2768,25 @@ rsbr_setup_rir_rockdsdb_items(struct raft_instance_rocks_db *rir)
 static int
 rsbr_setup_rir(struct raft_instance *ri)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_setup_rir() entry");
     if (!ri)
         return -EINVAL;
 
     else if (ri->ri_backend_arg)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Backend arg already exists");
         return -EALREADY;
+    }
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Allocating raft_instance_rocks_db");
     ri->ri_backend_arg =
         niova_calloc(1UL, sizeof(struct raft_instance_rocks_db));
 
     if (!ri->ri_backend_arg)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Failed to allocate memory");
         return -ENOMEM;
+    }
 
     struct raft_instance_rocks_db *rir = ri->ri_backend_arg;
     rir->rir_log_fd = -1;
@@ -2562,11 +2798,28 @@ rsbr_setup_rir(struct raft_instance *ri)
         rir->rir_cf_table =
             (struct raft_server_rocksdb_cf_table *)ri->ri_backend_init_arg;
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Setting up subdirs");
     int rc = rsbr_subdirs_setup(ri);
     if (rc)
-         return rc;
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_subdirs_setup() failed: %s", strerror(-rc));
+        return rc;
+    }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Subdirs setup completed");
 
-    return rsbr_setup_rir_rockdsdb_items(rir);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Setting up rocksdb items");
+    rc = rsbr_setup_rir_rockdsdb_items(rir);
+    if (rc)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_setup_rir_rockdsdb_items() failed: %s", strerror(-rc));
+    }
+    else
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Rocksdb items setup completed");
+    }
+
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_setup_rir() exit with rc=%d", rc);
+    return rc;
 }
 
 static int
@@ -2672,40 +2925,63 @@ rsbr_prep_raft_instance_from_db(struct raft_instance *ri)
 static int
 rsbr_db_open(struct raft_instance *ri, struct raft_instance_rocks_db *rir)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_db_open() entry");
     NIOVA_ASSERT(ri && rir);
     NIOVA_ASSERT(ri->ri_proc_state == RAFT_PROC_STATE_BOOTING ||
                  ri->ri_proc_state == RAFT_PROC_STATE_RECOVERING);
 
     const bool recovering = ri->ri_proc_state == RAFT_PROC_STATE_RECOVERING ?
         true : false;
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Opening DB (recovering=%s)", recovering ? "true" : "false");
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Calling rsbr_db_open_internal()");
     int rc = rsbr_db_open_internal(ri, rir, false);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_db_open_internal() returned: %s", strerror(-rc));
 
     if (rc && !recovering) // Try to 'create' the db if the first open failed
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Retrying with create=true");
         rc = rsbr_db_open_internal(ri, rir, true);
         if (!rc)
         {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Initializing header after create");
             rc = rsbr_init_header(ri);
             if (rc)
+            {
+                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_init_header() failed: %s", strerror(-rc));
                 SIMPLE_LOG_MSG(LL_ERROR, "rsbr_init_header(): %s",
                                strerror(-rc));
+            }
         }
     }
 
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: DB open failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_db_open_internal(): %s", strerror(-rc));
         return -ENOTCONN;
     }
 
     // Called in both the booting and recovery contexts
-    return rsbr_prep_raft_instance_from_db(ri);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Preparing raft instance from DB");
+    rc = rsbr_prep_raft_instance_from_db(ri);
+    if (rc)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_prep_raft_instance_from_db() failed: %s", strerror(-rc));
+    }
+    else
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Raft instance prepared successfully");
+    }
+
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_db_open() exit with rc=%d", rc);
+    return rc;
 }
 
 static int
 rsbr_bulk_recover(struct raft_instance *ri)
 {
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover() entry");
     if (!ri)
         return -EINVAL;
 
@@ -2714,7 +2990,10 @@ rsbr_bulk_recover(struct raft_instance *ri)
 
     struct raft_recovery_handle *rrh = raft_instance_2_recovery_handle(ri);
     if (!rrh)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: No recovery handle found");
         return -ENOENT;
+    }
 
     // Initialize the values set by this function
     rrh->rrh_remaining = -1;
@@ -2723,6 +3002,7 @@ rsbr_bulk_recover(struct raft_instance *ri)
     if (uuid_is_null(rrh->rrh_peer_uuid) ||
         uuid_is_null(rrh->rrh_peer_db_uuid))
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: null peer or db-uuid");
         SIMPLE_LOG_MSG(LL_ERROR, "null peer or db-uuid");
         return -EINVAL;
     }
@@ -2730,60 +3010,105 @@ rsbr_bulk_recover(struct raft_instance *ri)
     int rc = 0;
     if (!rrh->rrh_from_recovery_marker)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Not from recovery marker, starting import");
         // network tranfser of remote db to chkpt/peers/
         rc = rsbr_bulk_recovery_import_remote_db(ri, rrh);
         if (rc)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Import remote DB failed: %s", strerror(-rc));
             return rc;
+        }
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Import remote DB completed successfully");
 
         /* Move dir from chkpt/peers/ to top level - this creates a "recovery
          * marker" from which the bulk recovery may be resumed should a crash
          * occur.
          */
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Staging remote DB");
         rc = rsbr_bulk_recovery_stage_remote_db(ri, rrh);
         if (rc)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Stage remote DB failed: %s", strerror(-rc));
             return rc;
-
+        }
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Stage remote DB completed successfully");
+    }
+    else
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Resuming from recovery marker, skipping import");
     }
 
     // remove the db/ directory
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Removing current DB contents");
     rc = rsbr_bulk_recovery_remove_current_db_contents(ri);
     if (rc)
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remove current DB contents failed: %s", strerror(-rc));
         return rc;
+    }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Remove current DB contents completed");
 
     // allocate and configure the rocksdb handle and accompanying structures
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Setting up RIR");
     rc = rsbr_setup_rir(ri);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_setup_rir() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_setup_rir(): %s", strerror(-rc));
         goto out;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_setup_rir() completed successfully");
 
     // Open the rocksdb and obtain system KVs
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Opening DB");
     rc = rsbr_db_open(ri, (struct raft_instance_rocks_db *)ri->ri_backend_arg);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_db_open() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_db_open(): %s", strerror(-rc));
         goto out;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_db_open() completed successfully");
 
     /* Replace raft entry headers and the log header KVs with versions
      * containing this peer's UUID.
      */
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Scrubbing DB");
     rc = rsbr_bulk_recovery_db_scrub(ri, rrh);
     if (rc)
     {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_db_scrub() failed: %s", strerror(-rc));
         SIMPLE_LOG_MSG(LL_ERROR, "rsbr_bulk_recovery_db_scrub(): %s",
                        strerror(-rc));
         goto out;
     }
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recovery_db_scrub() completed successfully");
 
 out:
     // rsbr_destroy() regardless of error
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying RIR");
     rsbr_destroy(ri);
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: RIR destroyed");
 
     if (!rc) // Rename the "in progress" db dir after closing the rocksdb
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Promoting scrubbed DB");
         rc = rsbr_bulk_recovery_promote_scrubbed_db(ri, rrh);
+        if (rc)
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Promote scrubbed DB failed: %s", strerror(-rc));
+        }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Promote scrubbed DB completed successfully");
+        }
+    }
+    else
+    {
+        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Skipping promote due to error (rc=%d)", rc);
+    }
 
+    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rsbr_bulk_recover() exit with rc=%d", rc);
     return rc;
 }
 

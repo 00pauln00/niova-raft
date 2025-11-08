@@ -6061,6 +6061,7 @@ raft_server_backend_close(struct raft_instance *ri)
     if (!ri || !raft_instance_is_shutdown(ri))
         return -EINVAL;
 
+    SIMPLE_LOG_MSG(LL_WARN, "RAFT_SERVER_BACKEND_CLOSE: Calling backend shutdown (normal shutdown path)");
     return ri->ri_backend->rib_backend_shutdown(ri);
 }
 
