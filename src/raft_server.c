@@ -5081,7 +5081,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
 
     // Allocate the buffer
     struct buffer_item *sink_bi;
-    sink_bi = buffer_set_allocate_item(&ri->ri_buf_set[RAFT_BUF_SET_LARGE]);
+    sink_bi = buffer_set_allocate_item(&ri->ri_buf_set[RAFT_BUF_SET_APPLY]);
     NIOVA_ASSERT(sink_bi);
     char *sink_buf = (char *)sink_bi->bi_iov.iov_base;
 
@@ -5094,9 +5094,9 @@ raft_server_state_machine_apply(struct raft_instance *ri)
 
     // Allocate reply buffer
     struct buffer_item *reply_bi;
-    const size_t reply_buf_sz = RAFT_BS_LARGE_SZ;
+    const size_t reply_buf_sz = RAFT_BS_APPLY_SZ;
 
-    reply_bi = buffer_set_allocate_item(&ri->ri_buf_set[RAFT_BUF_SET_LARGE]);
+    reply_bi = buffer_set_allocate_item(&ri->ri_buf_set[RAFT_BUF_SET_APPLY]);
     NIOVA_ASSERT(reply_bi);
 
     char *reply_buf = (char *)reply_bi->bi_iov.iov_base;
@@ -5929,16 +5929,18 @@ raft_server_instance_buffer_set_setup(struct raft_instance *ri)
 
     int rc;
     size_t buff_set_sizes[RAFT_BUF_SET_MAX] = {RAFT_BS_SMALL_SZ,
-                                               RAFT_BS_LARGE_SZ};
+                                               RAFT_BS_LARGE_SZ,
+                                               RAFT_BS_APPLY_SZ};
 
     int small_nbuf = RAFT_ENTRY_NUM_ENTRIES + tcp_mgr_worker_cnt_get();
     // Note: server fails if No. of large buffer is not nthreads + 1
     int large_nbuf = tcp_mgr_worker_cnt_get() + 1;
+    int apply_nbuf = RAFT_BS_APPLY_NBUF;
 
     SIMPLE_LOG_MSG(LL_NOTIFY, "sbuf count: %d, lbuf count: %d", small_nbuf,
                    large_nbuf);
 
-    size_t nbuff[RAFT_BUF_SET_MAX] = {small_nbuf, large_nbuf};
+    size_t nbuff[RAFT_BUF_SET_MAX] = {small_nbuf, large_nbuf, apply_nbuf};
 
     for (int p = 0; p < RAFT_BUF_SET_MAX; p++)
     {
