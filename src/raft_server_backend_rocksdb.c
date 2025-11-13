@@ -2416,17 +2416,7 @@ rsbr_destroy(struct raft_instance *ri)
 
     struct raft_instance_rocks_db *rir = rsbr_ri_to_rirdb(ri);
 
-    // Close log_fd if it's open (note: this might be registered with epoll,
-    // but epoll cleanup should handle EBADF gracefully)
-    if (rir->rir_log_fd >= 0)
-    {
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Closing log_fd=%d", rir->rir_log_fd);
-        int rc = close(rir->rir_log_fd);
-        if (rc)
-            SIMPLE_LOG_MSG(LL_WARN, "close(rir_log_fd): %s",
-                           strerror(-errno));
-        rir->rir_log_fd = -1;
-    }
+
 
     if (rir->rir_db)
     {
@@ -2438,35 +2428,17 @@ rsbr_destroy(struct raft_instance *ri)
             struct raft_server_rocksdb_cf_table *cft = rir->rir_cf_table;
             SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: CF table has %zu column families", cft->rsrcfe_num_cf);
 
-            // CRITICAL: Destroy non-default CF handles first, then default CF handle last.
-            // RocksDB requires the default column family handle to be destroyed last.
-            // The default CF is typically at index 0.
-            
-            // First pass: Destroy all non-default CF handles (indices 1, 2, ...)
-            for (size_t i = 1; i < cft->rsrcfe_num_cf; i++)
+            // Destroy all column family handles
+            for (size_t i = 0; i < cft->rsrcfe_num_cf; i++)
             {
                 if (cft->rsrcfe_cf_handles[i])
                 {
-                    const char *cf_name = cft->rsrcfe_cf_names[i] ? cft->rsrcfe_cf_names[i] : "NULL";
-                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying non-default CF handle[%zu] for '%s' (handle=%p)", 
-                                   i, cf_name, (void *)cft->rsrcfe_cf_handles[i]);
                     rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[i]);
                     cft->rsrcfe_cf_handles[i] = NULL;
                 }
             }
             
-            // Second pass: Destroy the default CF handle last (index 0)
-            if (cft->rsrcfe_num_cf > 0 && cft->rsrcfe_cf_handles[0])
-            {
-                const char *cf_name = cft->rsrcfe_cf_names[0] ? cft->rsrcfe_cf_names[0] : "NULL";
-                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Destroying default CF handle[0] for '%s' (handle=%p) LAST", 
-                               cf_name, (void *)cft->rsrcfe_cf_handles[0]);
-                rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[0]);
-                cft->rsrcfe_cf_handles[0] = NULL;
-            }
-            
-            // Note: We do NOT reset rsrcfe_num_cf to 0 to keep CF names for recovery
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: All CF handles destroyed (default destroyed last), num_cf=%zu", cft->rsrcfe_num_cf);
+            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: All CF handles destroyed, num_cf=%zu", cft->rsrcfe_num_cf);
         }
         else
         {
