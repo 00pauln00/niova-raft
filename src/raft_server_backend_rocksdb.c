@@ -2430,7 +2430,6 @@ rsbr_destroy(struct raft_instance *ri)
 
     if (rir->rir_db)
     {
-        // CRITICAL: Column family handles MUST be destroyed BEFORE closing the DB.
         // RocksDB's ColumnFamilySet destructor asserts that all handles are
         // destroyed (last_ref == true) before the DB is closed.
         if (rir->rir_cf_table)
@@ -2453,11 +2452,6 @@ rsbr_destroy(struct raft_instance *ri)
                                    i, cf_name, (void *)cft->rsrcfe_cf_handles[i]);
                     rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[i]);
                     cft->rsrcfe_cf_handles[i] = NULL;
-                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Non-default CF handle[%zu] destroyed successfully", i);
-                }
-                else
-                {
-                    SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Non-default CF handle[%zu] is already NULL", i);
                 }
             }
             
@@ -2469,13 +2463,9 @@ rsbr_destroy(struct raft_instance *ri)
                                cf_name, (void *)cft->rsrcfe_cf_handles[0]);
                 rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[0]);
                 cft->rsrcfe_cf_handles[0] = NULL;
-                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Default CF handle[0] destroyed successfully (last)");
-            }
-            else if (cft->rsrcfe_num_cf > 0)
-            {
-                SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Default CF handle[0] is already NULL");
             }
             
+            // Note: We do NOT reset rsrcfe_num_cf to 0 to keep CF names for recovery
             SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: All CF handles destroyed (default destroyed last), num_cf=%zu", cft->rsrcfe_num_cf);
         }
         else
@@ -2483,69 +2473,6 @@ rsbr_destroy(struct raft_instance *ri)
             SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: No CF table to destroy");
         }
 
-        // Before closing RocksDB, perform comprehensive cleanup to ensure
-        // all references are released before ColumnFamilySet destructor runs.
-        //
-        // ISOLATION TESTING: To test which fix is critical, comment out sections below:
-        // - TEST: Comment out WAL flush (lines 2489-2502) - likely not needed for refs
-        // - TEST: Comment out file deletion disable/enable (lines 2504-2517, 2524-2536) - likely not needed
-        // - TEST: Comment out cancel background work (lines 2519-2522) - LIKELY THE KEY FIX
-        //
-        // HYPOTHESIS: rocksdb_cancel_all_background_work() is critical because:
-        //   - Background threads hold SuperVersion references
-        //   - SuperVersions hold ColumnFamilyData references
-        //   - If background work is still running when DB closes, refs remain → assertion fails
-        
-        // ===== FIX 1: Flush WAL (for data integrity, likely not needed for ref counting) =====
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Flushing WAL before close");
-        char *flush_err = NULL;
-        rocksdb_flush_wal(rir->rir_db, 1, &flush_err); // sync=true
-        if (flush_err)
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_flush_wal() returned error: %s (continuing anyway)", flush_err);
-            free(flush_err);
-            flush_err = NULL;
-        }
-        else
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: WAL flushed successfully");
-        }
-        
-        // ===== FIX 2: Disable file deletions (prevents new background ops, likely not critical) =====
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Disabling file deletions");
-        char *disable_err = NULL;
-        rocksdb_disable_file_deletions(rir->rir_db, &disable_err);
-        if (disable_err)
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_disable_file_deletions() returned error: %s (continuing anyway)", disable_err);
-            free(disable_err);
-            disable_err = NULL;
-        }
-        else
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: File deletions disabled successfully");
-        }
-        
-        // ===== FIX 3: Cancel all background work ⭐ LIKELY THE CRITICAL FIX =====
-        // This ensures all background threads (compaction/flush) complete and release
-        // their SuperVersion references BEFORE the DB is closed.
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Canceling all background work before close");
-        rocksdb_cancel_all_background_work(rir->rir_db, 1); // wait=true to ensure completion
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Background work canceled");
-        
-        // ===== FIX 4: Re-enable file deletions (cleanup, likely not critical) =====
-        SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Re-enabling file deletions");
-        char *enable_err = NULL;
-        rocksdb_enable_file_deletions(rir->rir_db, 0, &enable_err); // force=0 (false)
-        if (enable_err)
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: rocksdb_enable_file_deletions() returned error: %s (continuing anyway)", enable_err);
-            free(enable_err);
-        }
-        else
-        {
-            SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: File deletions re-enabled successfully");
-        }
 
         SIMPLE_LOG_MSG(LL_WARN, "BULK_RECOVERY: Closing RocksDB (db=%p)", (void *)rir->rir_db);
         rocksdb_close(rir->rir_db);
