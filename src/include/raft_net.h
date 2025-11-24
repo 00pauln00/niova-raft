@@ -338,6 +338,7 @@ struct raft_net_client_request_handle
     int                                   rncr_op_error;
     int64_t                               rncr_entry_term;
     int64_t                               rncr_current_term;
+    uint64_t                              rncr_apply_handler_version;
     raft_entry_idx_t                      rncr_pending_apply_idx;
     const struct raft_client_rpc_msg     *rncr_request;
     const char                           *rncr_request_or_commit_data;
@@ -824,5 +825,8 @@ raft_net_set_num_checkpoints(struct raft_instance *ri, size_t num_ckpts);
 int
 raft_net_sm_write_supplements_merge(struct raft_net_sm_write_supplements *dest,
                                     struct raft_net_sm_write_supplements *src);
+
+uint64_t
+raft_net_get_apply_handler_version(void);
 
 #endif

@@ -30,7 +30,9 @@
 #define RAFT_ENTRY_MAGIC  0x1a2b3c4dd4c3b2a1
 #define RAFT_HEADER_MAGIC 0xafaeadacabaaa9a8
 
-#define RAFT_ENTRY_HEADER_RESERVE 488
+#define RAFT_ENTRY_HEADER_RESERVE 504
+
+#define RAFT_APPLY_HANDLER_VERSION_DEFAULT UINT64_MAX
 
 #define RAFT_ENTRY_SIZE_MIN        65536
 
@@ -244,6 +246,7 @@ struct raft_entry_header
     uint32_t         reh_entry_sz[RAFT_ENTRY_NUM_ENTRIES];
     uint8_t          reh_leader_change_marker; // noop
     uint8_t          reh_num_entries; // number of raft entries
+    uint64_t         reh_apply_handler_version; // Version of handler to use
     uint8_t          reh_pad[RAFT_ENTRY_PAD_SIZE];
 };
 
@@ -599,6 +602,7 @@ struct raft_instance
     struct raft_recovery_handle     ri_recovery_handle;
     struct buffer_set               ri_buf_set[RAFT_BUF_SET_MAX];
     pthread_mutex_t                 ri_write_mutex;
+    uint64_t                        ri_apply_handler_version;
     struct raft_instance_co_wr     *ri_coalesced_wr; //must be the last member
 };
 
