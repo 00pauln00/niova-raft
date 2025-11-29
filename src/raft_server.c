@@ -5106,7 +5106,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
     uint32_t offset = 0;
 
     for (uint32_t i = 0; i < reh.reh_num_entries;
-         i++, offset += reh.reh_entry_sz[i])
+         offset += reh.reh_entry_sz[i], i++)
     {
         // Move the offset to next entry
         if(i < nai.rla_sub_idx)
