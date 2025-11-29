@@ -4159,7 +4159,7 @@ raft_server_reply_to_client(struct raft_instance *ri,
 }
 
 static raft_net_cb_ctx_t
-raft_server_udp_client_deny_request(struct raft_instance *ri,
+raft_server_deny_client_request(struct raft_instance *ri,
                                     struct raft_net_client_request_handle *rncr,
                                     struct ctl_svc_node *csn,
                                     const int rc)
@@ -4491,7 +4491,7 @@ raft_server_client_rncr_prepare(struct raft_instance *ri,
                        "cannot accept client message, rc=%d: msg-type=%u",
                        rc, rcm->rcrm_type);
 
-        raft_server_udp_client_deny_request(ri, rncr, csn, rc);
+        raft_server_deny_client_request(ri, rncr, csn, rc);
 
         if (rncr->rncr_csn)
         {
@@ -4569,7 +4569,7 @@ raft_server_client_rncr_complete(struct raft_instance *ri,
 
         rc = rc ? rc : sm_cb_rc;
 
-        raft_server_udp_client_deny_request(ri, rncr, rncr->rncr_csn, rc);
+        raft_server_deny_client_request(ri, rncr, rncr->rncr_csn, rc);
     }
     else
     {
