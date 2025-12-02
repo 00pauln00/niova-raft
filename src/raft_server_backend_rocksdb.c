@@ -545,8 +545,10 @@ rsb_sm_get_last_applied_kv_idx(struct raft_instance *ri)
     }
     else
     {
-        DBG_RAFT_INSTANCE(LL_WARN, ri, "rsbr-last-applied-idx=%ld crc=%x",
-                          rla.rla_idx, rla.rla_cumulative_crc);
+        DBG_RAFT_INSTANCE(LL_WARN, ri,
+                          "rsbr-last-applied-idx=%ld crc=%x kv-crc=%x",
+                          rla.rla_idx, rla.rla_cumulative_crc,
+                          rla.rla_kv_cumulative_crc);
 
         raft_server_backend_setup_last_applied(ri, &rla);
     }
