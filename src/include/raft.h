@@ -518,6 +518,7 @@ struct raft_last_applied
     uint32_t                rla_sub_idx_max;
     raft_entry_idx_t        rla_synced_idx;
     crc32_t                 rla_cumulative_crc;
+    crc32_t                 rla_kv_cumulative_crc;
 };
 
 struct raft_instance

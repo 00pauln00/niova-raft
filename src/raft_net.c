@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <rocksdb/c.h>
 
 #include "niova/alloc.h"
 #include "niova/crc32.h"
@@ -2336,6 +2337,54 @@ raft_net_write_supp_add(struct raft_net_wr_supp *ws,
     return 0;
 }
 
+static void
+raft_net_sm_write_supplement_crc_update(
+    struct raft_net_sm_write_supplements *rnsws,
+    const struct raft_net_wr_supp *ws)
+{
+    if (!rnsws || !ws || !rnsws->rnsws_kv_crc_enabled ||
+        ws->rnws_op != RAFT_NET_WR_SUPP_OP_WRITE)
+        return;
+
+    // Filter: only hash KVs from user CF (PMDBTS_CF), skip internal metadata
+    if (ws->rnws_handle)
+    {
+        size_t cf_name_len = 0;
+        char *cf_name = rocksdb_column_family_handle_get_name(
+            (rocksdb_column_family_handle_t *)ws->rnws_handle, &cf_name_len);
+        
+        bool is_user_cf = (cf_name && cf_name_len > 0 && 
+                          strncmp(cf_name, "PMDBTS_CF", cf_name_len) == 0);
+        
+        if (cf_name)
+            niova_free(cf_name);
+        
+        if (!is_user_cf)
+        {
+            LOG_MSG(LL_TRACE, "KV_CRC_SKIP: key='%.*s' key_sz=%zu val_sz=%zu (not user CF)",
+                    (int)MIN(ws->rnws_key_size, 64), ws->rnws_key ? ws->rnws_key : "(null)",
+                    ws->rnws_key_size, ws->rnws_value_size);
+            return;
+        }
+    }
+
+    crc32_t old_crc = rnsws->rnsws_kv_crc;
+
+    // Chain the CRC: use previous running checksum as seed for key
+    if (ws->rnws_key && ws->rnws_key_size)
+        rnsws->rnsws_kv_crc = niova_crc((const unsigned char *)ws->rnws_key,
+                                        ws->rnws_key_size, rnsws->rnsws_kv_crc);
+
+    // Continue chaining with value
+    if (ws->rnws_value && ws->rnws_value_size)
+        rnsws->rnsws_kv_crc = niova_crc((const unsigned char *)ws->rnws_value,
+                                        ws->rnws_value_size, rnsws->rnsws_kv_crc);
+
+    LOG_MSG(LL_TRACE, "KV_CRC_UPDATE: key='%.*s' key_sz=%zu val_sz=%zu old_running=0x%x new_running=0x%x",
+            (int)MIN(ws->rnws_key_size, 64), ws->rnws_key ? ws->rnws_key : "(null)",
+            ws->rnws_key_size, ws->rnws_value_size, old_crc, rnsws->rnsws_kv_crc);
+}
+
 int
 raft_net_client_user_id_parse(const char *in,
                               struct raft_net_client_user_id *rncui,
@@ -2437,7 +2486,11 @@ raft_net_sm_write_supplement_add(struct raft_net_sm_write_supplements *rnsws,
     if (rnws_comp_cb) // Apply the callback if it was specified
         ws->rnws_comp_cb = rnws_comp_cb;
 
-    return raft_net_write_supp_add(ws, op, key, key_size, value, value_size);
+    int rc = raft_net_write_supp_add(ws, op, key, key_size, value, value_size);
+    if (!rc)
+        raft_net_sm_write_supplement_crc_update(rnsws, ws);
+
+    return rc;
 }
 
 static void
@@ -2457,6 +2510,8 @@ raft_net_sm_write_supplement_destroy_internal(
 
     rnsws->rnsws_ws = NULL;
     rnsws->rnsws_nitems = 0;
+    rnsws->rnsws_kv_crc = 0;
+    rnsws->rnsws_kv_crc_enabled = false;
 }
 
 void
@@ -2493,6 +2548,10 @@ raft_net_sm_write_supplements_merge(struct raft_net_sm_write_supplements *dest,
 
     dest->rnsws_nitems = new_total;
 
+    // Disable CRC on merged destination (it's now stale)
+    dest->rnsws_kv_crc = 0;
+    dest->rnsws_kv_crc_enabled = false;
+
     // Release only the src's rnsws_ws array, leaving the merged items intact
     raft_net_sm_write_supplement_destroy_internal(src, false);
 
@@ -2500,10 +2559,35 @@ raft_net_sm_write_supplements_merge(struct raft_net_sm_write_supplements *dest,
 }
 
 void
+raft_net_sm_write_supplement_enable_kv_crc(struct raft_net_sm_write_supplements *rnsws,
+                                           crc32_t seed)
+{
+    if (!rnsws)
+        return;
+
+    rnsws->rnsws_kv_crc = seed;
+    rnsws->rnsws_kv_crc_enabled = true;
+}
+
+crc32_t
+raft_net_sm_write_supplement_get_kv_crc(
+    const struct raft_net_sm_write_supplements *rnsws)
+{
+    if (!rnsws || !rnsws->rnsws_kv_crc_enabled)
+        return 0;
+
+    return rnsws->rnsws_kv_crc;
+}
+
+void
 raft_net_sm_write_supplement_init(struct raft_net_sm_write_supplements *rnsws)
 {
     if (rnsws)
+    {
         rnsws->rnsws_nitems = 0;
+        rnsws->rnsws_kv_crc = 0;
+        rnsws->rnsws_kv_crc_enabled = false;
+    }
 }
 
 void
