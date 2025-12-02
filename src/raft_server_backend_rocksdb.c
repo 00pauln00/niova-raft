@@ -545,8 +545,10 @@ rsb_sm_get_last_applied_kv_idx(struct raft_instance *ri)
     }
     else
     {
-        DBG_RAFT_INSTANCE(LL_WARN, ri, "rsbr-last-applied-idx=%ld crc=%x",
-                          rla.rla_idx, rla.rla_cumulative_crc);
+        DBG_RAFT_INSTANCE(LL_WARN, ri,
+                          "rsbr-last-applied-idx=%ld crc=%x kv-crc=%x",
+                          rla.rla_idx, rla.rla_cumulative_crc,
+                          rla.rla_kv_checksum);
 
         raft_server_backend_setup_last_applied(ri, &rla);
     }
@@ -582,9 +584,10 @@ rsbr_sm_apply_opt(struct raft_instance *ri,
 {
     NIOVA_ASSERT(ri);
 
-    DBG_RAFT_INSTANCE(LL_DEBUG, ri, "idx=%ld cumu-crc=%x",
+    DBG_RAFT_INSTANCE(LL_DEBUG, ri, "idx=%ld cumu-crc=%x kv-crc=%x",
                       ri->ri_last_applied.rla_idx,
-                      ri->ri_last_applied.rla_cumulative_crc);
+                      ri->ri_last_applied.rla_cumulative_crc,
+                      ri->ri_last_applied.rla_kv_checksum);
 
     struct raft_instance_rocks_db *rir = rsbr_ri_to_rirdb(ri);
 

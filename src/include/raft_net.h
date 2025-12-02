@@ -13,6 +13,7 @@
 #include <netinet/udp.h>
 
 #include "niova/common.h"
+#include "niova/crc32.h"
 #include "niova/epoll_mgr.h"
 #include "niova/log.h"
 #include "niova/net_ctl.h"
@@ -327,6 +328,8 @@ struct raft_net_sm_write_supplements
 {
     size_t                   rnsws_nitems;
     struct raft_net_wr_supp *rnsws_ws;
+    crc32_t                  rnsws_kv_crc;
+    bool                     rnsws_kv_crc_enabled;
 };
 
 struct raft_net_client_request_handle
@@ -712,6 +715,12 @@ raft_net_sm_write_supplement_add(struct raft_net_sm_write_supplements *rnsws,
                                  void *handle, void (*rnws_comp_cb)(void *),
                                  const char *key, const size_t key_size,
                                  const char *value, const size_t value_size);
+void
+raft_net_sm_write_supplement_enable_kv_crc(struct raft_net_sm_write_supplements *rnsws,
+                                           crc32_t seed);
+crc32_t
+raft_net_sm_write_supplement_get_kv_crc(
+    const struct raft_net_sm_write_supplements *rnsws);
 
 // Raft Net User ID API
 static inline void

@@ -163,6 +163,8 @@ struct raft_append_entries_request_msg
     int64_t  raerqm_prev_log_index;
     uint32_t raerqm_prev_idx_crc;
     uint32_t raerqm_this_idx_crc;
+    int64_t  raerqm_last_applied_index;
+    uint32_t raerqm_last_applied_kv_crc;
     uint32_t raerqm_size_arr[RAFT_ENTRY_NUM_ENTRIES];
     uint32_t raerqm_entries_sz;
     uint32_t raerqm_num_entries;
@@ -178,6 +180,8 @@ struct raft_append_entries_reply_msg
     int64_t raerpm_leader_term;
     int64_t raerpm_prev_log_index;
     int64_t raerpm_synced_log_index; // highest synchronized index
+    int64_t raerpm_last_applied_index;
+    uint32_t raerpm_last_applied_kv_crc;
     uint8_t raerpm_heartbeat_msg;
     uint8_t raerpm_err_stale_term;
     uint8_t raerpm_err_non_matching_prev_term;
@@ -518,6 +522,7 @@ struct raft_last_applied
     uint32_t                rla_sub_idx_max;
     raft_entry_idx_t        rla_synced_idx;
     crc32_t                 rla_cumulative_crc;
+    crc32_t                 rla_kv_checksum;
 };
 
 struct raft_instance
