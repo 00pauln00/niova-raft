@@ -1,21 +1,26 @@
 # KV Cumulative CRC Verification Script
 
-This script verifies that all Raft peers in a cluster have matching KV cumulative CRCs by querying their RocksDB databases.
+This script verifies that all Raft peers in a cluster have matching 
+KV cumulative CRCs by SSHing to each peer and querying their 
+RocksDB databases.
 
 ## Script: `verify_kv_crc.sh`
 
-Simple bash script for verifying KV CRC consistency across all peers in a cluster.
+Simple bash script for verifying KV CRC consistency across all 
+peers in a cluster.
 
 **Features:**
-- Parse peer configuration files (`.peer`)
-- Query RocksDB databases via `ldb`
+- Parse peer configuration files (`.peer`)y
+- SSH to each peer using IP addresses from config
+- Query RocksDB databases via `ldb` on remote hosts
 - Parse `struct raft_last_applied` binary data
 - Compare KV cumulative CRCs across all peers
 - Colorized output with clear success/failure indicators
 
 **Requirements:**
 - Bash 4.0+
-- `ldb` tool (RocksDB command-line tool)
+- SSH access to all peers (passwordless SSH keys recommended)
+- `ldb` tool installed on all peer hosts
 - Python 3 (for binary struct parsing)
 
 **Usage:**
@@ -110,21 +115,38 @@ Verification Results
 
 ## Manual Verification
 
-You can also manually query a single peer:
+You can also manually query a single peer via SSH:
 
 ```bash
-# Query the database
-ldb --db=/path/to/raftdb/db get "a1_hdr.last_applied" --value_hex
+# Query the database on remote host
+ssh <peer-ip> "ldb --db=/path/to/raftdb/db get \
+  'a1_hdr.last_applied' --value_hex"
 
 # Parse with Python
 python3 << 'EOF'
 import struct
 hex_str = "0300000000000000010000000100000002000000000000006AFC100FC24841A9"
 data = bytes.fromhex(hex_str)
-rla_idx, sub_idx, sub_idx_max, synced_idx, cum_crc = struct.unpack('<QIIQi', data[:28])
-kv_crc = struct.unpack('<I', data[28:32])[0] if len(data) >= 32 else None
+rla_idx, sub_idx, sub_idx_max, synced_idx, cum_crc = \
+  struct.unpack('<QIIQi', data[:28])
+kv_crc = struct.unpack('<I', data[28:32])[0] if len(data) >= 32 \
+  else None
 print(f"Last Applied Index: {rla_idx}")
 print(f"KV Cumulative CRC: 0x{kv_crc:08x}")
 EOF
+```
+
+## SSH Configuration
+
+For passwordless operation, set up SSH keys:
+
+```bash
+# Generate SSH key (if not already done)
+ssh-keygen -t ed25519
+
+# Copy to all peers
+ssh-copy-id user@<peer-ip-1>
+ssh-copy-id user@<peer-ip-2>
+# ... for all peers
 ```
 

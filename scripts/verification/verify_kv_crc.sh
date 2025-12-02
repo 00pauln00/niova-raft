@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-# KV Cumulative CRC Verification Script (Bash version)
+# KV Cumulative CRC Verification Script
 #
-# This script verifies that all Raft peers in a cluster have matching KV cumulative CRCs.
-# It reads peer configurations and checks their RocksDB databases locally.
+# This script verifies that all Raft peers in a cluster have 
+# matching KV cumulative CRCs. It reads peer configurations and 
+# SSHs to each peer to query their RocksDB databases.
 #
 # Usage:
 #   ./verify_kv_crc.sh <config_dir>
@@ -100,11 +101,16 @@ for peer_config in $PEER_CONFIGS; do
     
     echo "Peer: ${peer_uuid:0:8}... ($ipaddr:$port)"
     
-    # Query ldb
-    hex_value=$(ldb --db="$db_path" get "a1_hdr.last_applied" --value_hex 2>/dev/null || echo "")
+    # Query ldb via SSH
+    hex_value=$(ssh -o StrictHostKeyChecking=no \
+                    -o ConnectTimeout=5 \
+                    "$ipaddr" \
+                    "ldb --db='$db_path' get 'a1_hdr.last_applied' \
+                     --value_hex 2>/dev/null" || echo "")
     
     if [ -z "$hex_value" ]; then
         echo -e "  ${RED}❌ Failed to query peer${NC}"
+        echo "  (SSH or ldb command failed)"
         echo
         SUCCESS=false
         continue
@@ -175,5 +181,6 @@ else
     
     exit 1
 fi
+
 
 
