@@ -5469,10 +5469,7 @@ raft_server_instance_init(struct raft_instance *ri,
     ri->ri_server_sm_request_cb = sm_request_handler;
     ri->ri_init_cb = init_peer_handler;
     ri->ri_backend_init_arg = arg;
-
-
     ri->ri_apply_handler_version = raft_net_get_apply_handler_version();
-
     ri->ri_synchronous_writes =
         opts & RAFT_INSTANCE_OPTIONS_SYNC_WRITES ? true : false;
     ri->ri_coalesced_writes =
