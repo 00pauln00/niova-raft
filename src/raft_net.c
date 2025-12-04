@@ -27,6 +27,7 @@
 #include "niova/udp.h"
 #include "niova/util_thread.h"
 #include "niova/fault_inject.h"
+#include "niova/env.h"
 
 #include "raft.h"
 
@@ -2543,4 +2544,19 @@ static destroy_ctx_t NIOVA_DESTRUCTOR(RAFT_SYS_CTOR_PRIORITY)
 raft_net_destroy(void)
 {
     regfree(&raftNetRncuiRegex);
+}
+
+uint64_t
+raft_net_get_apply_handler_version(void)
+{
+    const struct niova_env_var *ev = env_get(NIOVA_ENV_VAR_apply_handler_version);
+    NIOVA_ASSERT(ev);
+    
+    uint64_t version = ev->nev_present ? (uint64_t)ev->nev_long_value :
+                       RAFT_APPLY_HANDLER_VERSION_DEFAULT;
+    
+    FATAL_IF(version == RAFT_APPLY_HANDLER_VERSION_DEFAULT,
+             "NIOVA_APPLY_HANDLER_VERSION environment variable must be set");
+    
+    return version;
 }
