@@ -1092,10 +1092,15 @@ rsbr_num_entries_calc(struct raft_instance *ri)
     const char *iter_key = rocksdb_iter_key(iter, &iter_key_len);
 
     if (iter_key_len <= RAFT_ENTRY_KEY_PREFIX_ROCKSDB_STRLEN)
+    {
+        rocksdb_iter_destroy(iter);
         return (ssize_t)-EBADMSG;
+    }
 
     ssize_t last_entry_idx =
         strtoull(&iter_key[RAFT_ENTRY_KEY_PREFIX_ROCKSDB_STRLEN], NULL, 10);
+
+    rocksdb_iter_destroy(iter);
 
     SIMPLE_LOG_MSG(LL_NOTIFY, "last-entry-index=%zd", last_entry_idx + 1);
 
@@ -2312,17 +2317,39 @@ rsbr_destroy(struct raft_instance *ri)
 
     if (rir->rir_db)
     {
-        rocksdb_close(rir->rir_db);
-
-        // User must call raft_server_rocksdb_release_cf_table()
-        if (rir->rir_cf_table) // Handles seem to be freed in rocksdb_close()
+        if (rir->rir_cf_table)
         {
+            SIMPLE_LOG_MSG(LL_DEBUG,
+                           "BULK_RECOVERY: Destroying CF handles before DB close");
             struct raft_server_rocksdb_cf_table *cft = rir->rir_cf_table;
+            SIMPLE_LOG_MSG(LL_DEBUG,
+                           "BULK_RECOVERY: CF table has %zu column families",
+                           cft->rsrcfe_num_cf);
 
+            // Destroy all column family handles
             for (size_t i = 0; i < cft->rsrcfe_num_cf; i++)
+            {
                 if (cft->rsrcfe_cf_handles[i])
+                {
+                    rocksdb_column_family_handle_destroy(cft->rsrcfe_cf_handles[i]);
                     cft->rsrcfe_cf_handles[i] = NULL;
+                }
+            }
+
+            SIMPLE_LOG_MSG(LL_DEBUG,
+                           "BULK_RECOVERY: All CF handles destroyed, num_cf=%zu",
+                           cft->rsrcfe_num_cf);
         }
+        else
+        {
+            SIMPLE_LOG_MSG(LL_DEBUG, "BULK_RECOVERY: No CF table to destroy");
+        }
+
+        SIMPLE_LOG_MSG(LL_DEBUG, "BULK_RECOVERY: Closing RocksDB (db=%p)",
+                       (void *)rir->rir_db);
+        rocksdb_close(rir->rir_db);
+        rir->rir_db = NULL;
+        SIMPLE_LOG_MSG(LL_DEBUG, "BULK_RECOVERY: RocksDB closed");
     }
 
     if (rir->rir_writeoptions_sync)
