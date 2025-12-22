@@ -725,6 +725,7 @@ raft_server_entry_init(const struct raft_instance *ri,
     reh->reh_leader_change_marker =
         (opts == RAFT_WR_ENTRY_OPT_LEADER_CHANGE_MARKER) ? 1 : 0;
     reh->reh_crc = 0;
+    reh->reh_apply_handler_version = ri->ri_apply_handler_version;
 
     uuid_copy(reh->reh_self_uuid, RAFT_INSTANCE_2_SELF_UUID(ri));
     uuid_copy(reh->reh_raft_uuid, RAFT_INSTANCE_2_RAFT_UUID(ri));
@@ -5123,6 +5124,7 @@ raft_server_state_machine_apply(struct raft_instance *ri)
                                                     reply_buf_sz);
         raft_net_sm_write_supplement_enable_kv_crc(
             &rncr.rncr_sm_write_supp, nai.rla_kv_cumulative_crc);
+        rncr.rncr_apply_handler_version = reh.reh_apply_handler_version;
 
         rc = ri->ri_server_sm_request_cb(&rncr);
         if (rc)
@@ -5429,6 +5431,8 @@ raft_server_instance_restore_init_values(struct raft_instance *ri,
     ri->ri_election_timeout_max_ms = save->ri_election_timeout_max_ms;
     ri->ri_heartbeat_freq_per_election_min =
         save->ri_heartbeat_freq_per_election_min;
+
+    ri->ri_apply_handler_version = raft_net_get_apply_handler_version();
 }
 
 static void
@@ -5472,6 +5476,7 @@ raft_server_instance_init(struct raft_instance *ri,
     ri->ri_server_sm_request_cb = sm_request_handler;
     ri->ri_init_cb = init_peer_handler;
     ri->ri_backend_init_arg = arg;
+    ri->ri_apply_handler_version = raft_net_get_apply_handler_version();
     ri->ri_synchronous_writes =
         opts & RAFT_INSTANCE_OPTIONS_SYNC_WRITES ? true : false;
     ri->ri_coalesced_writes =
