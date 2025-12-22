@@ -4949,7 +4949,10 @@ raft_server_set_last_applied(struct raft_instance *ri,
      * are applied.
      */
     if (nai->rla_sub_idx == nai->rla_sub_idx_max)
+    {
         ri->ri_last_applied.rla_cumulative_crc = nai->rla_cumulative_crc;
+        ri->ri_last_applied.rla_kv_cumulative_crc = nai->rla_kv_cumulative_crc;
+    }
     else
         nai->rla_sub_idx++;
 }
@@ -5119,6 +5122,8 @@ raft_server_state_machine_apply(struct raft_instance *ri)
                                                     reh.reh_entry_sz[i],
                                                     reply_buf,
                                                     reply_buf_sz);
+        raft_net_sm_write_supplement_enable_kv_crc(
+            &rncr.rncr_sm_write_supp, nai.rla_kv_cumulative_crc);
         rncr.rncr_apply_handler_version = reh.reh_apply_handler_version;
 
         rc = ri->ri_server_sm_request_cb(&rncr);
@@ -5126,6 +5131,8 @@ raft_server_state_machine_apply(struct raft_instance *ri)
             failed = true;
 
         // Increment the sub applied idx and persist it
+        nai.rla_kv_cumulative_crc =
+            raft_net_sm_write_supplement_get_kv_crc(&rncr.rncr_sm_write_supp);
         raft_server_set_last_applied(ri, &nai);
         raft_server_sm_apply_opt(ri, &rncr.rncr_sm_write_supp);
         raft_net_sm_write_supplement_destroy(&rncr.rncr_sm_write_supp);
