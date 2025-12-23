@@ -6345,6 +6345,13 @@ raft_server_instance_run(const char *raft_uuid_str,
             }
         }
 
+        // Close TCP sockets and destroy workers before re-initialization
+        // to prevent deadlock when memset zeros condition variables
+        if (!raft_net_tcp_disabled())
+        {
+            raft_net_tcp_sockets_close(ri);
+        }
+
         // Initialization - this resets the raft instance's contents
         raft_server_instance_init(ri, type, raft_uuid_str, this_peer_uuid_str,
                                   sm_request_handler, init_peer_handler,
