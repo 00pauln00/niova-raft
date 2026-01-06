@@ -500,6 +500,9 @@ raft_net_instance_startup(struct raft_instance *ri, bool client_mode);
 int
 raft_net_instance_shutdown(struct raft_instance *ri);
 
+int
+raft_net_tcp_sockets_close(struct raft_instance *ri);
+
 void
 raft_net_instance_apply_callbacks(struct raft_instance *ri,
                                   raft_net_timer_cb_t timer_fd_cb,
