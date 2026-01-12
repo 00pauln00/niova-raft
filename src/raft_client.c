@@ -1754,19 +1754,21 @@ raft_client_reply_try_complete(struct raft_client_instance *rci,
     raft_client_sub_app_put(rci, sa, __func__, __LINE__);
 }
 
-/*
-raft_client_error_handler processes errors received from the 
-Raft server. If the error needs to be propagated to the Pumice layer, 
-it should be stored in rcrm_app_error. The function should return 
-true if the request processing should continue.
-*/
-bool raft_client_error_handler(struct raft_client_rpc_msg *rcrm) {
-    switch (rcrm->rcrm_sys_error) {
+/**
+ * raft_client_error_handler - Processes errors received from the
+ * Raft server. If the error needs to be propagated to the Pumice layer,
+ * it should be stored in rcrm_app_error. The function should return
+ * true if the request processing should continue to the Pumice layer.
+ */
+bool
+raft_client_sys_app_error_handler(struct raft_client_rpc_msg *rcrm)
+{
+    switch (rcrm->rcrm_sys_error)
+    {
         default:
             rcrm->rcrm_app_error = rcrm->rcrm_sys_error;
-            return true;
+            break;
     }
-
     return true;
 }
 
@@ -1793,9 +1795,8 @@ raft_client_recv_handler_process_reply(
     else if (rcrm->rcrm_sys_error)
     {
         DBG_RAFT_CLIENT_RPC_SOCK(LL_NOTIFY, rcrm, from, "sys-err=%s",
-                                strerror(-rcrm->rcrm_sys_error));
-        bool cpflag = raft_client_error_handler(rcrm);
-        if (!cpflag)
+                                 strerror(-rcrm->rcrm_sys_error));
+        if(!raft_client_sys_app_error_handler(rcrm))
             return;
     }
 
