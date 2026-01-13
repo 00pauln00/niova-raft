@@ -1756,11 +1756,10 @@ raft_client_reply_try_complete(struct raft_client_instance *rci,
 
 /**
  * raft_client_error_handler - Processes errors received from the
- * Raft server. If the error needs to be propagated to the Pumice layer,
- * it should be stored in rcrm_app_error. The function should return
- * true if the request processing should continue to the Pumice layer.
+ * raft server. If the error needs to be propagated to the Pumice layer,
+ * it should be stored in rcrm_app_error.
  */
-bool
+void
 raft_client_sys_app_error_handler(struct raft_client_rpc_msg *rcrm)
 {
     switch (rcrm->rcrm_sys_error)
@@ -1775,7 +1774,6 @@ raft_client_sys_app_error_handler(struct raft_client_rpc_msg *rcrm)
             rcrm->rcrm_app_error = rcrm->rcrm_sys_error;
             break;
     }
-    return true;
 }
 
 /**
@@ -1802,8 +1800,7 @@ raft_client_recv_handler_process_reply(
     {
         DBG_RAFT_CLIENT_RPC_SOCK(LL_NOTIFY, rcrm, from, "sys-err=%s",
                                  strerror(-rcrm->rcrm_sys_error));
-        if(!raft_client_sys_app_error_handler(rcrm))
-            return;
+        raft_client_sys_app_error_handler(rcrm)
     }
 
     niova_realtime_coarse_clock(&rci->rci_last_request_ackd);
