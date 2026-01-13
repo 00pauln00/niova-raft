@@ -1765,6 +1765,12 @@ raft_client_sys_app_error_handler(struct raft_client_rpc_msg *rcrm)
 {
     switch (rcrm->rcrm_sys_error)
     {
+        case -ENOENT:
+        case -ENOSYS:
+        case -EAGAIN:
+        case -EBUSY:
+            rcrm->rcrm_app_error = -EAGAIN;
+            break;
         default:
             rcrm->rcrm_app_error = rcrm->rcrm_sys_error;
             break;
