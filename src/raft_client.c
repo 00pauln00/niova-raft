@@ -1800,7 +1800,7 @@ raft_client_recv_handler_process_reply(
     {
         DBG_RAFT_CLIENT_RPC_SOCK(LL_NOTIFY, rcrm, from, "sys-err=%s",
                                  strerror(-rcrm->rcrm_sys_error));
-        raft_client_sys_app_error_handler(rcrm)
+        raft_client_sys_app_error_handler(rcrm);
     }
 
     niova_realtime_coarse_clock(&rci->rci_last_request_ackd);
