@@ -12,8 +12,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "raft_server_backend_rocksdb.h"
 #include "ctor.h"
+
+#define RAFT_ROCKSDB_MAX_CF 32
+#define RAFT_ROCKSDB_MAX_CF_NAME_LEN 4096
 
 typedef enum {
     CF_LAYER_RAFT = 0,
