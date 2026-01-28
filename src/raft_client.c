@@ -1533,7 +1533,7 @@ raft_client_request_submit(raft_client_instance_t client_instance,
     if (!sa)
     {
         LOG_MSG(LL_NOTIFY, "sub app already queued");
-        return -EALREADY; // Each sub-app may only have 1 outstanding request.
+        return -EEXIST; // Each sub-app may only have 1 outstanding request.
     }
 
     struct raft_client_request_handle *rcrh = &sa->rcsa_rh;
