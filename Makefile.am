@@ -73,6 +73,12 @@ test_raft_net_test_LDADD = $(NIOVA_LIBS) $(NIOVA_BT_LIB)
 test_raft_net_test_CFLAGS = $(AM_CFLAGS) -DUNIT_TEST
 TESTS += test/raft-net-test
 
+noinst_PROGRAMS += test/rocksdb-test
+test_rocksdb_test_SOURCES = test/rocksdb-test.c
+test_rocksdb_test_LDADD = $(ROCKSDB_LIBS)
+test_rocksdb_test_CFLAGS = $(AM_CFLAGS) -DUNIT_TEST
+TESTS += test/rocksdb-test
+
 autofmt:
 	uncrustify -c tools/uncrustify.cfg --no-backup `find . -name "*.[ch]"` | tee /dev/null
 
