@@ -29,6 +29,7 @@
 #include "popen_cmd.h"
 #include "raft.h"
 #include "raft_server_backend_rocksdb.h"
+#include "raft_cf_registry.h"
 #include "regex_defines.h"
 #include "registry.h"
 #include "fault_inject.h"
@@ -2620,16 +2621,77 @@ rsbr_db_open_internal(const struct raft_instance *ri,
 
     struct raft_server_rocksdb_cf_table *cft = rir->rir_cf_table;
 
-    // Prepare cf array
+    // Prepare cf array with per-CF options from registry
     const rocksdb_options_t *cft_opts[RAFT_ROCKSDB_MAX_CF];
+    rocksdb_options_t *cf_registry_opts[RAFT_ROCKSDB_MAX_CF] = {0};
+    
     if (cft && cft->rsrcfe_num_cf)
     {
         NIOVA_ASSERT(cft->rsrcfe_num_cf <= RAFT_ROCKSDB_MAX_CF);
+        
+        SIMPLE_LOG_MSG(LL_WARN,
+                      "CF_REGISTRY: Opening RocksDB with %zu CF(s), querying registry for configs...",
+                      cft->rsrcfe_num_cf);
+        
+        // Look up each CF in the registry and use its config function
         for (size_t i = 0; i < cft->rsrcfe_num_cf; i++)
+        {
+            const char *cf_name = cft->rsrcfe_cf_names[i];
+            const cf_schema_t *schema = NULL;
+            
+            SIMPLE_LOG_MSG(LL_WARN,
+                          "CF_REGISTRY: Looking up CF '%s' in registry...",
+                          cf_name);
+            
+            // Search all layers for this CF
+            for (cf_layer_t layer = CF_LAYER_RAFT; layer < CF_LAYER_MAX; layer++)
+            {
+                schema = cf_registry_lookup(layer, cf_name);
+                if (schema)
+                {
+                    SIMPLE_LOG_MSG(LL_WARN,
+                                  "CF_REGISTRY: Found CF '%s' in layer %d",
+                                  cf_name, layer);
+                    break;
+                }
+            }
+            
+            if (schema && schema->config_fn)
+            {
+                SIMPLE_LOG_MSG(LL_WARN,
+                              "CF_REGISTRY: Calling config function for CF '%s'...",
+                              cf_name);
+                
+                rocksdb_options_t *cf_opt = schema->config_fn();
+                if (cf_opt)
+                {
+                    cft_opts[i] = cf_opt;
+                    cf_registry_opts[i] = cf_opt;
+                    SIMPLE_LOG_MSG(LL_WARN,
+                                  "CF_REGISTRY: SUCCESS - Using custom config for CF '%s'",
+                                  cf_name);
+                }
+                else
+                {
+                    SIMPLE_LOG_MSG(LL_WARN,
+                                  "CF_REGISTRY: Config function for CF '%s' returned NULL, using default",
+                                  cf_name);
             cft_opts[i] = rir->rir_options;
     }
-    // Set prefix extractor for range queries
+            }
+            else
+            {
+                // Not in registry - use default options (backward compatibility)
+                SIMPLE_LOG_MSG(LL_WARN,
+                              "CF_REGISTRY: CF '%s' not found in registry, using default options",
+                              cf_name);
+                cft_opts[i] = rir->rir_options;
+            }
+        }
+    }
+    
     rocksdb_options_set_prefix_extractor(rir->rir_options, NULL);
+    
     char *err = NULL;
     rir->rir_db = (cft && cft->rsrcfe_num_cf) ?
         rocksdb_open_column_families(rir->rir_options, rocksdb_dir,
@@ -2638,6 +2700,17 @@ rsbr_db_open_internal(const struct raft_instance *ri,
         rocksdb_open(rir->rir_options, rocksdb_dir, &err);
 
     rc = (!rir->rir_db || err) ? -ENOENT : 0; // enoent is merely a guess
+    
+    // Clean up per-CF options (RocksDB copies them during open)
+    // Clean up regardless of success or failure
+    for (size_t i = 0; i < RAFT_ROCKSDB_MAX_CF; i++)
+    {
+        if (cf_registry_opts[i])
+        {
+            rocksdb_options_destroy(cf_registry_opts[i]);
+            cf_registry_opts[i] = NULL;
+        }
+    }
 
     SIMPLE_LOG_MSG((rc ? LL_ERROR : LL_WARN), "%s(`%s'): %s (try-create=%s)",
                    (cft && cft->rsrcfe_num_cf) ?
