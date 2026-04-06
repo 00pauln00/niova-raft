@@ -134,7 +134,7 @@ enum raft_buf_set_nbuf
 {
     RAFT_BS_SMALL_NBUF = (RAFT_ENTRY_NUM_ENTRIES + TCP_MGR_NTHREADS),
     RAFT_BS_LARGE_NBUF = TCP_MGR_NTHREADS,
-    RAFT_BS_APPLY_NBUF = 2 //These two are used by sink and reply within 
+    RAFT_BS_APPLY_NBUF = 2 //These two are used by sink and reply within
                            //.. raft_server_state_machine_apply
 };
 
@@ -601,6 +601,7 @@ struct raft_instance
     struct raft_rw_worker_thread    ri_reader_thread_ctl[RAFT_NUM_READ_THREADS];
     struct raft_work_queue          ri_worker_queue[RAFT_SERVER_BULK_MSG_MAX];
     struct raft_recovery_handle     ri_recovery_handle;
+    char                           *ri_buf_set_source;
     struct buffer_set               ri_buf_set[RAFT_BUF_SET_MAX];
     pthread_mutex_t                 ri_write_mutex;
     uint64_t                        ri_apply_handler_version;

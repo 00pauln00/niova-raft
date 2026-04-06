@@ -5954,12 +5954,26 @@ raft_server_instance_buffer_set_setup(struct raft_instance *ri)
 
     size_t nbuff[RAFT_BUF_SET_MAX] = {small_nbuf, large_nbuf, apply_nbuf};
 
+    size_t total_buf_size = 0;
+
+    for (int i = 0; i < RAFT_BUF_SET_MAX; i++)
+        total_buf_size += buff_set_sizes[i] * nbuff[i];
+
+    ri->ri_buf_set_source = niova_malloc(total_buf_size);
+    size_t off = 0;
+
     for (int p = 0; p < RAFT_BUF_SET_MAX; p++)
     {
-        rc = buffer_set_init(&ri->ri_buf_set[p], nbuff[p],
-                             buff_set_sizes[p],
+        char *src = &ri->ri_buf_set_source[off];
+        size_t xtotal_sz = buff_set_sizes[p] * nbuff[p];
+
+        rc = buffer_set_init(&ri->ri_buf_set[p], src, xtotal_sz,
+                             nbuff[p], buff_set_sizes[p],
                              (BUFSET_OPT_MEMALIGN | BUFSET_OPT_SERIALIZE));
         NIOVA_ASSERT(rc == 0);
+
+        off += xtotal_sz;
+        NIOVA_ASSERT(off <= total_buf_size);
     }
 
     return 0;
@@ -5976,6 +5990,12 @@ raft_server_instance_buffer_set_destroy(struct raft_instance *ri)
     {
         rc = buffer_set_destroy(&ri->ri_buf_set[p]);
         NIOVA_ASSERT(rc == 0);
+    }
+
+    if (ri->ri_buf_set_source)
+    {
+        niova_free(ri->ri_buf_set_source);
+        ri->ri_buf_set_source = NULL;
     }
 }
 
