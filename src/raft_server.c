@@ -5959,7 +5959,8 @@ raft_server_instance_buffer_set_setup(struct raft_instance *ri)
     for (int i = 0; i < RAFT_BUF_SET_MAX; i++)
         total_buf_size += buff_set_sizes[i] * nbuff[i];
 
-    ri->ri_buf_set_source = niova_malloc(total_buf_size);
+    ri->ri_buf_set_source = niova_posix_memalign(total_buf_size,
+                                                 BUFFER_SECTOR_SIZE);
     size_t off = 0;
 
     for (int p = 0; p < RAFT_BUF_SET_MAX; p++)
