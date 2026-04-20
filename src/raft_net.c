@@ -521,10 +521,20 @@ raft_net_tcp_disabled(void)
 static int
 raft_net_tcp_sockets_close(struct raft_instance *ri)
 {
+    if (raft_net_tcp_disabled())
+        return 0;
+
+    // Destroy workers before closing sockets to ensure clean shutdown
     if (raft_instance_is_client(ri))
+    {
+        tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
         return tcp_mgr_sockets_close(&ri->ri_client_tcp_mgr);
+    }
     else
     {
+        tcp_mgr_destroy(&ri->ri_peer_tcp_mgr);
+        tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
+        
         int rc = tcp_mgr_sockets_close(&ri->ri_peer_tcp_mgr);
         int rc2 = tcp_mgr_sockets_close(&ri->ri_client_tcp_mgr);
 
@@ -1580,6 +1590,12 @@ raft_net_instance_startup(struct raft_instance *ri, bool client_mode)
 
     if (!raft_net_tcp_disabled())
     {
+        // Destroy any existing TCP manager workers before setting up new ones
+        // This is especially important after bulk recovery when restarting
+        tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
+        if (!client_mode)
+            tcp_mgr_destroy(&ri->ri_peer_tcp_mgr);
+
         rc = tcp_mgr_setup(
             &ri->ri_client_tcp_mgr, ri,
             (epoll_mgr_ref_cb_t)raft_net_connection_getput,
@@ -1591,10 +1607,11 @@ raft_net_instance_startup(struct raft_instance *ri, bool client_mode)
             DEFAULT_BULK_CREDITS,
             DEFAULT_INCOMING_CREDITS, client_mode ? false : true);
 
-        if (rc) // needs a tcp_mgr_destroy()
+        if (rc)
         {
             SIMPLE_LOG_MSG(LL_WARN, "tcp_mgr_setup(client): %s",
                            strerror(-rc));
+            tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
             return rc;
         }
 
@@ -1609,10 +1626,12 @@ raft_net_instance_startup(struct raft_instance *ri, bool client_mode)
             DEFAULT_BULK_CREDITS,
             DEFAULT_INCOMING_CREDITS, false);
 
-        if (rc) // needs a tcp_mgr_destroy()
+        if (rc)
         {
             SIMPLE_LOG_MSG(LL_WARN, "tcp_mgr_setup(peer): %s",
                            strerror(-rc));
+            tcp_mgr_destroy(&ri->ri_peer_tcp_mgr);
+            tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
             return rc;
         }
     }
