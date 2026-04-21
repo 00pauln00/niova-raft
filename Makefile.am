@@ -26,10 +26,12 @@ RAFT_SERVER_CORE_SOURCES = $(RAFT_NET_CORE_SOURCES) src/raft_server.c
 
 RAFT_SERVER_BACKEND_SOURCES = \
         src/include/raft_server_backend_rocksdb.h \
+        src/include/raft_cf_registry.h \
         src/raft_server_backend_posix.c \
-        src/raft_server_backend_rocksdb.c
+        src/raft_server_backend_rocksdb.c \
+        src/raft_cf_registry.c
 
-raft_include_HEADERS += src/include/raft_server_backend_rocksdb.h
+raft_include_HEADERS += src/include/raft_server_backend_rocksdb.h src/include/raft_cf_registry.h
 
 RAFT_CLIENT_CORE_SOURCES = \
 	src/include/raft_net.h \
