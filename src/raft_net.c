@@ -27,6 +27,7 @@
 #include "niova/regex_defines.h"
 #include "niova/udp.h"
 #include "niova/util_thread.h"
+#include "niova/thread.h"
 #include "niova/fault_inject.h"
 #include "niova/env.h"
 
@@ -518,13 +519,40 @@ raft_net_tcp_disabled(void)
     return (ev && ev->nev_present);
 }
 
-static int
+static void
+raft_net_tcp_mgr_destroy(struct tcp_mgr_instance *tmi)
+{
+    if (!tmi)
+        return;
+
+    for (size_t i = 0; i < TCP_MGR_NTHREADS; i++)
+    {
+        if (tmi->tmi_workers[i].tc_thread_id != 0)
+        {
+            thread_halt_and_destroy(&tmi->tmi_workers[i]);
+        }
+    }
+
+    tmi->tmi_nworkers = 0;
+}
+
+int
 raft_net_tcp_sockets_close(struct raft_instance *ri)
 {
+    if (raft_net_tcp_disabled())
+        return 0;
+
+    // Destroy workers before closing sockets to ensure clean shutdown
     if (raft_instance_is_client(ri))
+    {
+        raft_net_tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
         return tcp_mgr_sockets_close(&ri->ri_client_tcp_mgr);
+    }
     else
     {
+        raft_net_tcp_mgr_destroy(&ri->ri_peer_tcp_mgr);
+        raft_net_tcp_mgr_destroy(&ri->ri_client_tcp_mgr);
+        
         int rc = tcp_mgr_sockets_close(&ri->ri_peer_tcp_mgr);
         int rc2 = tcp_mgr_sockets_close(&ri->ri_client_tcp_mgr);
 
